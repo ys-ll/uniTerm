@@ -22,23 +22,24 @@ export const useTabStore = defineStore('tab', () => {
   }
 
   function removeTabFromSplit(node: SplitNode, tabId: string): boolean {
-    // If this node has a tabGroupId matching the removed tab, clear it
+    // If this node directly references the removed tab, clear it
     if (node.tabGroupId === tabId) {
       node.tabGroupId = undefined
     }
-    // Recursively clean children
-    if (node.children) {
+
+    // Recursively process children
+    if (node.children && node.children.length > 0) {
       node.children = node.children.filter(child => {
-        // Remove child nodes that directly reference this tab
-        if (child.tabGroupId === tabId && !child.children?.length) {
-          return false
-        }
-        // Otherwise recurse
-        removeTabFromSplit(child, tabId)
-        return true
+        const keep = removeTabFromSplit(child, tabId)
+        return keep
       })
     }
-    return true
+
+    // Return false if this node should be pruned:
+    // - no tabGroupId
+    // - no children (or empty children array)
+    const hasContent = node.tabGroupId !== undefined || (node.children?.length > 0)
+    return hasContent || node.id === 'root' // never prune root
   }
 
   function removeTab(tabId: string) {
@@ -49,7 +50,7 @@ export const useTabStore = defineStore('tab', () => {
     if (activeTabId.value === tabId) {
       activeTabId.value = tabs.value.length > 0 ? tabs.value[0].id : null
     }
-    // Clean up split tree references
+    // Clean up split tree references (root is never pruned)
     removeTabFromSplit(splitRoot.value, tabId)
   }
 
