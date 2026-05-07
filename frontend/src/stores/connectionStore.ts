@@ -26,22 +26,22 @@ export const useConnectionStore = defineStore('connection', () => {
     }
   }
 
-  function add(config: ConnectionConfig) {
+  async function add(config: ConnectionConfig) {
     connections.value.push(config)
-    save()
+    await save()
   }
 
-  function update(id: string, config: Partial<ConnectionConfig>) {
+  async function update(id: string, config: Partial<ConnectionConfig>) {
     const idx = connections.value.findIndex(c => c.id === id)
     if (idx >= 0) {
       connections.value[idx] = { ...connections.value[idx], ...config }
-      save()
+      await save()
     }
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
     connections.value = connections.value.filter(c => c.id !== id)
-    save()
+    await save()
   }
 
   return {
