@@ -4,18 +4,21 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
 
 type SSHSession struct {
 	baseSession
-	client  *ssh.Client
-	session *ssh.Session
-	stdin   io.WriteCloser
-	stdout  io.Reader
-	stderr  io.Reader
-	quit    chan struct{}
+	client   *ssh.Client
+	session  *ssh.Session
+	stdin    io.WriteCloser
+	stdout   io.Reader
+	stderr   io.Reader
+	quit     chan struct{}
+	quitOnce sync.Once
 }
 
 func NewSSHSession(id string) *SSHSession {
@@ -56,8 +59,10 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	}
 
 	clientConfig := &ssh.ClientConfig{
-		User:            config.User,
-		Auth:            authMethods,
+		User:    config.User,
+		Auth:    authMethods,
+		Timeout: 30 * time.Second,
+		// TODO: Implement host key verification for production use
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
@@ -118,6 +123,11 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		return fmt.Errorf("shell: %w", err)
 	}
 
+	go func() {
+		_ = session.Wait()
+		s.Disconnect()
+	}()
+
 	s.client = client
 	s.session = session
 	s.stdin = stdinPipe
@@ -133,15 +143,9 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 func (s *SSHSession) readLoop() {
 	buf := make([]byte, 4096)
 	for {
-		select {
-		case <-s.quit:
-			return
-		default:
-		}
-
 		n, err := s.stdout.Read(buf)
 		if n > 0 {
-			s.emitData(buf[:n])
+			s.emitData(append([]byte(nil), buf[:n]...))
 		}
 		if err != nil {
 			if err != io.EOF {
@@ -162,7 +166,9 @@ func (s *SSHSession) Write(data []byte) error {
 }
 
 func (s *SSHSession) Disconnect() error {
-	close(s.quit)
+	s.quitOnce.Do(func() {
+		close(s.quit)
+	})
 	if s.session != nil {
 		s.session.Close()
 	}
