@@ -35,7 +35,11 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 	}
 
 	go func() {
-		_ = s.Connect(config)
+		if err := s.Connect(config); err != nil {
+			// Error is already propagated via status callback
+			// Log for debugging purposes
+			fmt.Printf("session %s connect error: %v\n", s.ID(), err)
+		}
 	}()
 
 	sm.sessions[config.ID] = s
@@ -87,6 +91,8 @@ func (sm *SessionManager) CloseAll() {
 	sm.mu.Unlock()
 
 	for _, s := range sessions {
-		s.Disconnect()
+		if err := s.Disconnect(); err != nil {
+			fmt.Printf("session %s disconnect error: %v\n", s.ID(), err)
+		}
 	}
 }
