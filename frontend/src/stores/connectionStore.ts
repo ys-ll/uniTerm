@@ -1,0 +1,56 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { SaveConnections, LoadConnections } from '../../wailsjs/go/main/App'
+import type { ConnectionConfig } from '../types/session'
+
+export const useConnectionStore = defineStore('connection', () => {
+  const connections = ref<ConnectionConfig[]>([])
+  const loading = ref(false)
+
+  async function load() {
+    loading.value = true
+    try {
+      connections.value = await LoadConnections()
+    } catch (e) {
+      console.error('Failed to load connections:', e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function save() {
+    try {
+      await SaveConnections(connections.value)
+    } catch (e) {
+      console.error('Failed to save connections:', e)
+    }
+  }
+
+  function add(config: ConnectionConfig) {
+    connections.value.push(config)
+    save()
+  }
+
+  function update(id: string, config: Partial<ConnectionConfig>) {
+    const idx = connections.value.findIndex(c => c.id === id)
+    if (idx >= 0) {
+      connections.value[idx] = { ...connections.value[idx], ...config }
+      save()
+    }
+  }
+
+  function remove(id: string) {
+    connections.value = connections.value.filter(c => c.id !== id)
+    save()
+  }
+
+  return {
+    connections,
+    loading,
+    load,
+    save,
+    add,
+    update,
+    remove
+  }
+})
