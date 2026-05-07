@@ -59,20 +59,32 @@ func (s *baseSession) ID() string            { return s.id }
 func (s *baseSession) Type() string          { return s.sessionType }
 func (s *baseSession) Title() string         { return s.title }
 func (s *baseSession) Status() SessionStatus { s.mu.RLock(); defer s.mu.RUnlock(); return s.status }
-func (s *baseSession) SetOnDataCallback(cb func([]byte))           { s.onDataCallback = cb }
-func (s *baseSession) SetOnStatusChangeCallback(cb func(SessionStatus)) { s.onStatusCallback = cb }
+func (s *baseSession) SetOnDataCallback(cb func([]byte)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onDataCallback = cb
+}
+func (s *baseSession) SetOnStatusChangeCallback(cb func(SessionStatus)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onStatusCallback = cb
+}
 
 func (s *baseSession) setStatus(st SessionStatus) {
 	s.mu.Lock()
 	s.status = st
+	cb := s.onStatusCallback
 	s.mu.Unlock()
-	if s.onStatusCallback != nil {
-		s.onStatusCallback(st)
+	if cb != nil {
+		cb(st)
 	}
 }
 
 func (s *baseSession) emitData(data []byte) {
-	if s.onDataCallback != nil {
-		s.onDataCallback(data)
+	s.mu.RLock()
+	cb := s.onDataCallback
+	s.mu.RUnlock()
+	if cb != nil {
+		cb(data)
 	}
 }
