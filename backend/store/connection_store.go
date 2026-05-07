@@ -35,7 +35,7 @@ func (s *ConnectionStore) Save(connections []session.ConnectionConfig) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.filePath(), data, 0644)
+	return os.WriteFile(s.filePath(), data, 0600)
 }
 
 func (s *ConnectionStore) Load() ([]session.ConnectionConfig, error) {
