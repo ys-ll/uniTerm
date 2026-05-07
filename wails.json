@@ -1,0 +1,15 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "uniTerm",
+  "outputfilename": "uniTerm",
+  "frontend": {
+    "dir": "./frontend",
+    "install": "npm install",
+    "build": "npm run build",
+    "dev": "npm run dev"
+  },
+  "author": {
+    "name": "uniTerm",
+    "email": "uniTerm@example.com"
+  }
+}
