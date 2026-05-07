@@ -22,16 +22,10 @@ export const useTabStore = defineStore('tab', () => {
   }
 
   function removeTabFromSplit(node: SplitNode, tabId: string): boolean {
-    // If this node directly references the removed tab, clear it
-    if (node.tabGroupId === tabId) {
-      node.tabGroupId = undefined
-    }
-
     // Recursively process children
     if (node.children && node.children.length > 0) {
       node.children = node.children.filter(child => {
-        const keep = removeTabFromSplit(child, tabId)
-        return keep
+        return removeTabFromSplit(child, tabId)
       })
     }
 
