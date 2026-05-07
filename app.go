@@ -68,7 +68,7 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 		return nil, err
 	}
 
-	// Setup event forwarding
+	// Setup event forwarding BEFORE starting connection
 	s.SetOnDataCallback(func(data []byte) {
 		runtime.EventsEmit(a.ctx, "session:data", map[string]interface{}{
 			"id":   s.ID(),
@@ -82,6 +82,13 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 			"status": status,
 		})
 	})
+
+	// Start connection AFTER callbacks are registered
+	go func() {
+		if err := s.Connect(config); err != nil {
+			fmt.Printf("session %s connect error: %v\n", s.ID(), err)
+		}
+	}()
 
 	info := &session.SessionInfo{
 		ID:     s.ID(),

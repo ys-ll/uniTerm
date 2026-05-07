@@ -34,14 +34,6 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 		return nil, fmt.Errorf("unsupported session type: %s", sessionType)
 	}
 
-	go func() {
-		if err := s.Connect(config); err != nil {
-			// Error is already propagated via status callback
-			// Log for debugging purposes
-			fmt.Printf("session %s connect error: %v\n", s.ID(), err)
-		}
-	}()
-
 	sm.sessions[config.ID] = s
 	return s, nil
 }
