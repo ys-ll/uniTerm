@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"uniTerm/backend/session"
 	"uniTerm/backend/store"
@@ -20,7 +21,13 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.sessionManager = session.NewSessionManager()
-	a.connectionStore = store.NewConnectionStore(ctx)
+
+	cs, err := store.NewConnectionStore()
+	if err != nil {
+		fmt.Println("Failed to init connection store:", err)
+		return
+	}
+	a.connectionStore = cs
 }
 
 func (a *App) shutdown(ctx context.Context) {
