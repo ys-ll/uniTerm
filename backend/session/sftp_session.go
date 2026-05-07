@@ -48,13 +48,13 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	case "agent":
-		// Agent auth not yet implemented; fall back to password for now
-		authMethods = append(authMethods, ssh.Password(config.Password))
+		return fmt.Errorf("agent auth not yet implemented")
 	}
 
 	clientConfig := &ssh.ClientConfig{
-		User:            config.User,
-		Auth:            authMethods,
+		User: config.User,
+		Auth: authMethods,
+		// TODO: Implement host key verification for production use
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         30 * time.Second,
 	}
@@ -83,13 +83,21 @@ func (s *SFTPSession) Write(data []byte) error {
 }
 
 func (s *SFTPSession) Disconnect() error {
+	var errs []error
 	if s.sftpCli != nil {
-		s.sftpCli.Close()
+		if err := s.sftpCli.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if s.client != nil {
-		s.client.Close()
+		if err := s.client.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	s.setStatus(StatusDisconnected)
+	if len(errs) > 0 {
+		return fmt.Errorf("disconnect errors: %v", errs)
+	}
 	return nil
 }
 
@@ -123,9 +131,12 @@ func (s *SFTPSession) PutFile(path string, data []byte) error {
 	}
 	f, err := s.sftpCli.Create(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("create file: %w", err)
 	}
 	defer f.Close()
-	_, err = f.Write(data)
-	return err
+	if _, err := f.Write(data); err != nil {
+		s.sftpCli.Remove(path) // clean up partial file
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }
