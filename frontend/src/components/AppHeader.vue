@@ -5,14 +5,17 @@
       <el-button size="small" @click="$emit('new-connection')">
         <el-icon><Plus /></el-icon> New Connection
       </el-button>
+      <el-button type="primary" size="small" @click="$emit('toggle-ai')">
+        <el-icon><ChatDotRound /></el-icon> AI
+      </el-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, ChatDotRound } from '@element-plus/icons-vue'
 
-defineEmits(['new-connection'])
+defineEmits(['new-connection', 'toggle-ai'])
 </script>
 
 <style scoped>

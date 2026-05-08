@@ -1,6 +1,6 @@
 <template>
-  <el-dialog v-model="visible" title="New Connection" width="500px">
-    <el-form :model="form" label-width="100px">
+  <el-dialog v-model="visible" :title="isEdit ? 'Edit Connection' : 'New Connection'" width="500px">
+    <el-form id="conn-form" :model="form" label-width="100px" @submit.prevent="onConnect">
       <el-form-item label="Name">
         <el-input v-model="form.name" placeholder="My Server" />
       </el-form-item>
@@ -34,28 +34,33 @@
     </el-form>
     <template #footer>
       <el-button @click="visible = false">Cancel</el-button>
-      <el-button type="primary" @click="onSubmit">Connect</el-button>
+      <el-button type="primary" native-type="submit" form="conn-form">{{ isEdit ? 'Save & Connect' : 'Connect' }}</el-button>
+      <el-button @click="onSave">{{ isEdit ? 'Save' : 'Save Only' }}</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
+import { reactive, computed, watch } from 'vue'
 import type { ConnectionConfig } from '../types/session'
 
 const props = defineProps<{
   modelValue: boolean
+  editConfig?: ConnectionConfig
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   save: [config: ConnectionConfig]
+  connect: [config: ConnectionConfig]
 }>()
 
 const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v)
 })
+
+const isEdit = computed(() => !!props.editConfig)
 
 const form = reactive<ConnectionConfig>({
   id: '',
@@ -69,13 +74,39 @@ const form = reactive<ConnectionConfig>({
   keyPath: ''
 })
 
-function onSubmit() {
-  emit('save', { ...form })
-  // Reset form
+watch(() => props.editConfig, (config) => {
+  if (config) {
+    Object.assign(form, { ...config })
+  } else {
+    resetForm()
+  }
+}, { immediate: true })
+
+function resetForm() {
+  form.id = ''
   form.name = ''
+  form.type = 'ssh'
   form.host = ''
+  form.port = 22
   form.user = ''
+  form.authType = 'password'
   form.password = ''
   form.keyPath = ''
+}
+
+function onSave() {
+  emit('save', { ...form })
+  visible.value = false
+  if (!props.editConfig) {
+    resetForm()
+  }
+}
+
+function onConnect() {
+  emit('connect', { ...form })
+  visible.value = false
+  if (!props.editConfig) {
+    resetForm()
+  }
 }
 </script>
