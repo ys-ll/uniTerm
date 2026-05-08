@@ -32,6 +32,7 @@ export const useAIStore = defineStore('ai', () => {
   const mode = ref<ExecutionMode>('confirm')
   const config = ref<AIConfig>(loadConfig())
   const isRunning = ref(false)
+  const debug = ref(false)
 
   function toggle() {
     visible.value = !visible.value
@@ -69,6 +70,7 @@ export const useAIStore = defineStore('ai', () => {
     config,
     isRunning,
     saveConfig,
-    conversation
+    conversation,
+    debug
   }
 })

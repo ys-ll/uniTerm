@@ -17,6 +17,7 @@
         { label: 'Auto', value: 'autonomous' },
         { label: 'Confirm', value: 'confirm' }
       ]" size="small" />
+      <el-checkbox v-model="aiStore.debug" size="small">Debug</el-checkbox>
     </div>
 
     <div ref="messagesRef" class="ai-messages">
@@ -139,7 +140,9 @@ function saveSettings() {
   padding: 8px 12px;
   border-bottom: 1px solid #3d3d3d;
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 12px;
 }
 .ai-messages {
   flex: 1;

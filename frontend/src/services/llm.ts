@@ -16,23 +16,32 @@ export async function chat(options: ChatOptions): Promise<string> {
 
   if (!apiKey) throw new Error('API key not configured')
 
+  const requestBody = {
+    model,
+    messages: options.messages,
+    tools: options.tools,
+    tool_choice: options.tools ? 'auto' : undefined,
+    stream: true
+  }
+
+  if (store.debug) {
+    console.log('[AI Debug] Request:', JSON.stringify(requestBody, null, 2))
+  }
+
   const res = await fetch(`${baseURL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     },
-    body: JSON.stringify({
-      model,
-      messages: options.messages,
-      tools: options.tools,
-      tool_choice: options.tools ? 'auto' : undefined,
-      stream: true
-    })
+    body: JSON.stringify(requestBody)
   })
 
   if (!res.ok) {
     const text = await res.text()
+    if (store.debug) {
+      console.log('[AI Debug] HTTP Error:', res.status, text)
+    }
     throw new Error(`LLM API error ${res.status}: ${text}`)
   }
 
@@ -56,6 +65,9 @@ export async function chat(options: ChatOptions): Promise<string> {
 
       try {
         const json = JSON.parse(trimmed.slice(6))
+        if (store.debug) {
+          console.log('[AI Debug] SSE chunk:', JSON.stringify(json))
+        }
         const delta = json.choices?.[0]?.delta
         if (!delta) continue
 
@@ -71,10 +83,16 @@ export async function chat(options: ChatOptions): Promise<string> {
             }
           }
         }
-      } catch {
-        // ignore parse errors for malformed SSE chunks
+      } catch (e) {
+        if (store.debug) {
+          console.log('[AI Debug] Parse error:', e, 'line:', trimmed)
+        }
       }
     }
+  }
+
+  if (store.debug) {
+    console.log('[AI Debug] Full response:', fullContent)
   }
 
   return fullContent
