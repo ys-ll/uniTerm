@@ -1,4 +1,5 @@
 import { useAIStore } from '../stores/aiStore'
+import type { AIMessage } from '../types/ai'
 
 export interface ChatOptions {
   messages: Array<{ role: string; content: string; tool_calls?: any; tool_call_id?: string }>
@@ -8,6 +9,16 @@ export interface ChatOptions {
   }>
   onChunk?: (chunk: string) => void
   onToolCall?: (toolCall: { id: string; function: { name: string; arguments: string } }) => void
+}
+
+function addDebugLog(store: ReturnType<typeof useAIStore>, text: string) {
+  if (!store.debug) return
+  const msg: AIMessage = {
+    id: `dbg-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    role: 'tool',
+    content: `[Debug] ${text}`
+  }
+  store.addMessage(msg)
 }
 
 export async function chat(options: ChatOptions): Promise<string> {
@@ -24,9 +35,7 @@ export async function chat(options: ChatOptions): Promise<string> {
     stream: true
   }
 
-  if (store.debug) {
-    console.log('[AI Debug] Request:', JSON.stringify(requestBody, null, 2))
-  }
+  addDebugLog(store, `Request body:\n${JSON.stringify(requestBody, null, 2)}`)
 
   const res = await fetch(`${baseURL}/chat/completions`, {
     method: 'POST',
@@ -39,16 +48,44 @@ export async function chat(options: ChatOptions): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text()
-    if (store.debug) {
-      console.log('[AI Debug] HTTP Error:', res.status, text)
-    }
+    addDebugLog(store, `HTTP Error ${res.status}:\n${text}`)
     throw new Error(`LLM API error ${res.status}: ${text}`)
   }
 
+  addDebugLog(store, `HTTP ${res.status}, Content-Type: ${res.headers.get('content-type') || 'unknown'}`)
+
+  const contentType = res.headers.get('content-type') || ''
+  const isSSE = contentType.includes('text/event-stream') || contentType.includes('application/octet-stream')
+
+  // Non-streaming response fallback
+  if (!isSSE) {
+    const text = await res.text()
+    addDebugLog(store, `Non-SSE response body:\n${text.slice(0, 4000)}`)
+    try {
+      const json = JSON.parse(text)
+      const content = json.choices?.[0]?.message?.content || ''
+      const toolCalls = json.choices?.[0]?.message?.tool_calls || []
+      for (const tc of toolCalls) {
+        if (tc.function?.name) {
+          options.onToolCall?.({ id: tc.id, function: tc.function })
+        }
+      }
+      if (content) {
+        options.onChunk?.(content)
+      }
+      addDebugLog(store, `Parsed content: ${content.slice(0, 500)}`)
+      return content
+    } catch (e: any) {
+      throw new Error(`Failed to parse non-SSE response: ${e.message}`)
+    }
+  }
+
+  // SSE streaming response
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   let fullContent = ''
   let buffer = ''
+  let chunkCount = 0
 
   while (true) {
     const { done, value } = await reader.read()
@@ -65,8 +102,9 @@ export async function chat(options: ChatOptions): Promise<string> {
 
       try {
         const json = JSON.parse(trimmed.slice(6))
-        if (store.debug) {
-          console.log('[AI Debug] SSE chunk:', JSON.stringify(json))
+        chunkCount++
+        if (store.debug && chunkCount <= 3) {
+          addDebugLog(store, `SSE chunk #${chunkCount}:\n${JSON.stringify(json, null, 2)}`)
         }
         const delta = json.choices?.[0]?.delta
         if (!delta) continue
@@ -83,17 +121,13 @@ export async function chat(options: ChatOptions): Promise<string> {
             }
           }
         }
-      } catch (e) {
-        if (store.debug) {
-          console.log('[AI Debug] Parse error:', e, 'line:', trimmed)
-        }
+      } catch (e: any) {
+        addDebugLog(store, `Parse error: ${e.message}\nLine: ${trimmed.slice(0, 200)}`)
       }
     }
   }
 
-  if (store.debug) {
-    console.log('[AI Debug] Full response:', fullContent)
-  }
+  addDebugLog(store, `Stream complete. Total chunks: ${chunkCount}. Content length: ${fullContent.length}`)
 
   return fullContent
 }

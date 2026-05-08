@@ -54,6 +54,12 @@ export async function runAgent(userInput: string) {
 
     assistantMsg.tool_calls = toolCalls.length > 0 ? toolCalls : undefined
 
+    if (!assistantMsg.content && toolCalls.length === 0) {
+      assistantMsg.content = '[No response received from the model. Check your API settings and network connection.]'
+      store.isRunning = false
+      return
+    }
+
     if (toolCalls.length === 0) {
       store.isRunning = false
       return
