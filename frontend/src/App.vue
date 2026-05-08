@@ -4,8 +4,7 @@
     <div class="main-content">
       <Sidebar @connect="onConnect" />
       <div class="tab-area">
-        <TabBar />
-        <TabContent />
+        <SplitContainer :node="tabStore.splitRoot" />
       </div>
     </div>
     <ConnectionForm v-model="showConnectionForm" @save="onConnect" />
@@ -16,8 +15,7 @@
 import { ref, onMounted } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import Sidebar from './components/Sidebar.vue'
-import TabBar from './components/TabBar.vue'
-import TabContent from './components/TabContent.vue'
+import SplitContainer from './components/SplitContainer.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import { useConnectionStore } from './stores/connectionStore'
 import { useTabStore } from './stores/tabStore'
