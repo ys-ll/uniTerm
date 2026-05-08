@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { SaveConnections, LoadConnections } from '../../wailsjs/go/main/App'
+import { EventsOn } from '../../wailsjs/runtime'
 import type { ConnectionConfig } from '../types/session'
 
 export const useConnectionStore = defineStore('connection', () => {
@@ -43,6 +44,11 @@ export const useConnectionStore = defineStore('connection', () => {
     connections.value = connections.value.filter(c => c.id !== id)
     await save()
   }
+
+  // Listen for cross-window connection sync
+  EventsOn('store:connections:changed', (updatedConnections: ConnectionConfig[]) => {
+    connections.value = updatedConnections
+  })
 
   return {
     connections,

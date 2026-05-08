@@ -57,6 +57,16 @@ func (a *App) LoadConnections() ([]session.ConnectionConfig, error) {
 	return a.connectionStore.Load()
 }
 
+func (a *App) OnConnectionsChanged(callback func([]session.ConnectionConfig)) {
+	runtime.EventsOn(a.ctx, "store:connections:changed", func(optionalData ...interface{}) {
+		if len(optionalData) > 0 {
+			if connections, ok := optionalData[0].([]session.ConnectionConfig); ok {
+				callback(connections)
+			}
+		}
+	})
+}
+
 // SessionManager methods
 
 func (a *App) CreateSession(sessionType string, config session.ConnectionConfig) (*session.SessionInfo, error) {
