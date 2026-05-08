@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"uniTerm/backend/session"
@@ -132,4 +136,45 @@ func (a *App) SessionWrite(sessionID string, data string) error {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
 	return s.Write([]byte(data))
+}
+
+func (a *App) SessionResize(sessionID string, cols, rows int) error {
+	if a.sessionManager == nil {
+		return fmt.Errorf("session manager not initialized")
+	}
+	s, ok := a.sessionManager.Get(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	return s.Resize(cols, rows)
+}
+
+// ChatCompletion proxies LLM API requests through the Go backend to bypass WebView2 CORS restrictions.
+func (a *App) ChatCompletion(apiKey, baseURL, model string, requestJSON string) (string, error) {
+	url := baseURL + "/chat/completions"
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader([]byte(requestJSON)))
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("do request: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", fmt.Errorf("read body: %w", err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d: %s", res.StatusCode, string(body))
+	}
+
+	return string(body), nil
 }
