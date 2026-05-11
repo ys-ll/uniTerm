@@ -49,3 +49,136 @@ export namespace session {
 
 }
 
+export namespace store {
+	
+	export class AIConfig {
+	    apiKey: string;
+	    baseURL: string;
+	    model: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.apiKey = source["apiKey"];
+	        this.baseURL = source["baseURL"];
+	        this.model = source["model"];
+	    }
+	}
+	export class AIModelConfig {
+	    id: string;
+	    name: string;
+	    apiKey: string;
+	    baseURL: string;
+	    model: string;
+	    protocol: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIModelConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.apiKey = source["apiKey"];
+	        this.baseURL = source["baseURL"];
+	        this.model = source["model"];
+	        this.protocol = source["protocol"];
+	    }
+	}
+	export class AISettings {
+	    models: AIModelConfig[];
+	    activeModelId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AISettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.models = this.convertValues(source["models"], AIModelConfig);
+	        this.activeModelId = source["activeModelId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TerminalSettings {
+	    theme: string;
+	    fontFamily: string;
+	    fontSize: number;
+	    selectionAction: string;
+	    rightClickAction: string;
+	    maxHistoryLines: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.theme = source["theme"];
+	        this.fontFamily = source["fontFamily"];
+	        this.fontSize = source["fontSize"];
+	        this.selectionAction = source["selectionAction"];
+	        this.rightClickAction = source["rightClickAction"];
+	        this.maxHistoryLines = source["maxHistoryLines"];
+	    }
+	}
+	export class AppSettings {
+	    theme: string;
+	    language: string;
+	    terminal: TerminalSettings;
+	    ai: AISettings;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.theme = source["theme"];
+	        this.language = source["language"];
+	        this.terminal = this.convertValues(source["terminal"], TerminalSettings);
+	        this.ai = this.convertValues(source["ai"], AISettings);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+

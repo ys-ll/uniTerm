@@ -28,6 +28,12 @@ export const useConnectionStore = defineStore('connection', () => {
   }
 
   async function add(config: ConnectionConfig) {
+    if (!config.id) {
+      config.id = `conn-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    }
+    if (connections.value.some(c => c.id === config.id)) {
+      return
+    }
     connections.value.push(config)
     await save()
   }

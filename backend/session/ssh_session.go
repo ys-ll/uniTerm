@@ -85,7 +85,7 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		ssh.TTY_OP_OSPEED: 14400,
 	}
 
-	if err := session.RequestPty("xterm-256color", 80, 24, modes); err != nil {
+	if err := session.RequestPty("xterm-256color", 24, 240, modes); err != nil {
 		session.Close()
 		client.Close()
 		s.setStatus(StatusError)
@@ -177,6 +177,14 @@ func (s *SSHSession) Disconnect() error {
 	}
 	s.setStatus(StatusDisconnected)
 	return nil
+}
+
+func (s *SSHSession) Resize(cols, rows int) error {
+	if s.session == nil {
+		return fmt.Errorf("session not connected")
+	}
+	fmt.Printf("[Resize] %s -> cols=%d rows=%d\n", s.id, cols, rows)
+	return s.session.WindowChange(rows, cols)
 }
 
 func (s *SSHSession) IsConnected() bool {

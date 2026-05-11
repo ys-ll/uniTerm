@@ -1,0 +1,87 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows/amd64
+            artifact: uniTerm.exe
+          - os: ubuntu-latest
+            platform: linux/amd64
+            artifact: uniTerm
+          - os: macos-latest
+            platform: darwin/universal
+            artifact: uniTerm.app
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm install
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux/amd64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Build
+        run: wails build -platform ${{ matrix.platform }} -ldflags "-s -w"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uniTerm-${{ matrix.platform }}
+          path: build/bin/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package macOS app
+        run: |
+          cd artifacts/uniTerm-darwin/universal
+          zip -r ../../uniTerm-darwin-universal.zip uniTerm.app
+          cd ../..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/uniTerm-windows/amd64/uniTerm.exe
+            artifacts/uniTerm-linux/amd64/uniTerm
+            uniTerm-darwin-universal.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

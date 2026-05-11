@@ -1,19 +1,117 @@
-import { chat, AVAILABLE_TOOLS } from './llm'
+import { chat, AVAILABLE_TOOLS, addDebugLog } from './llm'
 import { executeCommand } from './terminalAgent'
 import { useAIStore } from '../stores/aiStore'
-import type { AIMessage, ToolCall } from '../types/ai'
+import { useTabStore } from '../stores/tabStore'
+
+function hasActiveSession(): boolean {
+  const tabStore = useTabStore()
+  return !!tabStore.activeTab?.sessionId
+}
+
+function isDangerousCommand(command: string): boolean {
+  const dangerousPatterns = [
+    /\brm\s+-[rf]*\s+\//i,
+    /\brm\s+-[rf]*\s+~/i,
+    /\brm\s+/i,
+    /\bshutdown\b/i,
+    /\breboot\b/i,
+    /\bpoweroff\b/i,
+    /\bhalt\b/i,
+    /\binit\s+0\b/i,
+    /\bmkfs\b/i,
+    /\bfdisk\b/i,
+    /\bdd\s+if=[^|]*of=\/dev\//i,
+    /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:\s*\(/,
+    /\bchmod\s+.*\s+\//i,
+    />\s*\/dev\/[sh]d[a-z]/i,
+    /\bmkfs\./i,
+    /\bparted\b/i,
+    /\bwipefs\b/i,
+    /\bsysctl\b/i,
+    /\becho\s+.*>\s*\/sys\//i,
+    /\becho\s+.*>\s*\/proc\/sys\//i,
+    /\buserdel\b/i,
+    /\bgroupdel\b/i,
+    /\bkillall\b/i,
+    /\bpkill\b/i,
+    /\bsystemctl\s+(poweroff|reboot|halt|suspend|hibernate)/i,
+  ]
+  return dangerousPatterns.some(p => p.test(command))
+}
+
+function shouldConfirm(dangerous: boolean): boolean {
+  const store = useAIStore()
+  switch (store.mode) {
+    case 'confirm_all': return true
+    case 'confirm_dangerous': return dangerous
+    case 'bypass': return false
+    default: return true
+  }
+}
+
+function buildSystemPrompt(): string {
+  const store = useAIStore()
+  const tabStore = useTabStore()
+  const activeTab = tabStore.activeTab
+
+  let base = store.systemPrompt
+  if (!activeTab) return base
+
+  const parts: string[] = []
+  parts.push(`Current active terminal tab: "${activeTab.title}" (id: ${activeTab.id}, type: ${activeTab.type})`)
+  if (activeTab.type === 'ssh' && activeTab.config) {
+    parts.push(`Connected to: ${activeTab.config.user}@${activeTab.config.host}:${activeTab.config.port}`)
+  } else if (activeTab.type === 'local') {
+    parts.push('This is a local terminal session.')
+  }
+
+  return base + '\n\n--- Current Context ---\n' + parts.join('\n') + '\n---'
+}
 
 export async function runAgent(userInput: string) {
   const store = useAIStore()
+
+  if (!hasActiveSession()) {
+    if (userInput) {
+      store.addMessage({
+        id: `msg-${Date.now()}`,
+        role: 'user',
+        content: userInput
+      })
+    }
+    store.addMessage({
+      id: `msg-${Date.now()}`,
+      role: 'assistant',
+      content: '请先在主窗口中打开一个终端会话，这样我才能执行命令。'
+    })
+    return
+  }
+
+  // Auto-reject any pending tools from previous turn
+  if (userInput) {
+    const pendingMsg = store.messages.find(m => m.pendingTools?.length)
+    if (pendingMsg) {
+      for (const pt of [...pendingMsg.pendingTools!]) {
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: 'User started a new conversation. Previous command was cancelled.',
+          tool_call_id: pt.id
+        })
+      }
+      delete pendingMsg.pendingTools
+    }
+  }
+
+  store.resetStop()
   store.isRunning = true
 
   if (userInput) {
-    const userMsg: AIMessage = {
+    store.addMessage({
       id: `msg-${Date.now()}`,
       role: 'user',
       content: userInput
-    }
-    store.addMessage(userMsg)
+    })
   }
 
   let turnCount = 0
@@ -22,73 +120,111 @@ export async function runAgent(userInput: string) {
   while (turnCount < maxTurns) {
     turnCount++
 
-    const assistantMsg: AIMessage = {
+    if (store.stopRequested) {
+      store.isRunning = false
+      return
+    }
+
+    const assistantMsg = store.addMessage({
       id: `msg-${Date.now()}`,
       role: 'assistant',
       content: ''
+    })
+
+    const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = []
+
+    const chatOptions: any = {
+      system: buildSystemPrompt(),
+      messages: store.conversation,
+      tools: AVAILABLE_TOOLS,
+      onChunk: (chunk: string) => {
+        if (store.stopRequested) return
+        assistantMsg.content += chunk
+      },
+      onToolUse: (tu: { id: string; name: string; input: Record<string, unknown> }) => {
+        if (store.stopRequested) return
+        toolUses.push(tu)
+      }
     }
-    store.addMessage(assistantMsg)
-
-    const toolCalls: ToolCall[] = []
-
     try {
-      await chat({
-        messages: store.conversation,
-        tools: AVAILABLE_TOOLS,
-        onChunk: (chunk) => {
-          assistantMsg.content += chunk
-        },
-        onToolCall: (tc) => {
-          toolCalls.push({
-            id: tc.id,
-            type: 'function',
-            function: { name: tc.function.name, arguments: tc.function.arguments }
-          })
-        }
-      })
+      await chat(chatOptions)
+      // Preserve raw API message blocks for conversation history
+      if (chatOptions._rawApiMsg) {
+        assistantMsg._rawApiMsg = chatOptions._rawApiMsg
+      }
     } catch (e: any) {
+      addDebugLog(store, `LLM error: ${e.message ?? e}`)
       assistantMsg.content += `\n\n[Error: ${e.message ?? e}]`
       store.isRunning = false
       return
     }
 
-    assistantMsg.tool_calls = toolCalls.length > 0 ? toolCalls : undefined
+    if (store.stopRequested) {
+      store.isRunning = false
+      return
+    }
 
-    if (!assistantMsg.content && toolCalls.length === 0) {
+    // Enforce single tool call
+    if (toolUses.length > 1) {
+      toolUses.splice(1)
+    }
+
+    // Store tool calls in the message for UI confirmation
+    if (toolUses.length > 0) {
+      assistantMsg.tool_calls = toolUses.map(tu => ({
+        id: tu.id,
+        type: 'function' as const,
+        function: {
+          name: tu.name,
+          arguments: JSON.stringify(tu.input)
+        }
+      }))
+    }
+
+    if (!assistantMsg.content && toolUses.length === 0) {
       assistantMsg.content = '[No response received from the model. Check your API settings and network connection.]'
       store.isRunning = false
       return
     }
 
-    if (toolCalls.length === 0) {
+    if (toolUses.length === 0) {
       store.isRunning = false
       return
     }
 
-    for (const tc of toolCalls) {
-      if (tc.function.name === 'execute_command') {
-        const args = JSON.parse(tc.function.arguments)
-        const command: string = args.command
+    // Process exactly one tool call
+    const tu = toolUses[0]
+    if (tu.name === 'execute_command') {
+      const command = tu.input.command as string
+      const dangerous = isDangerousCommand(command)
 
-        if (store.mode === 'confirm') {
-          assistantMsg.pendingTool = {
-            id: tc.id,
-            name: 'execute_command',
-            arguments: args
-          }
-          store.isRunning = false
-          return
-        }
+      if (shouldConfirm(dangerous)) {
+        assistantMsg.pendingTools = [{
+          id: tu.id,
+          name: 'execute_command',
+          arguments: tu.input,
+          dangerous
+        }]
+        store.isRunning = false
+        return
+      }
 
+      // Auto-execute
+      try {
         const result = await executeCommand(command)
-
-        const toolResult: AIMessage = {
+        store.addMessage({
           id: `msg-${Date.now()}`,
           role: 'tool',
           content: result.output,
-          tool_call_id: tc.id
-        }
-        store.addMessage(toolResult)
+          tool_call_id: tu.id
+        })
+      } catch (e: any) {
+        store.addMessage({
+          id: `msg-${Date.now()}`,
+          role: 'tool',
+          content: `[Error executing command: ${e.message ?? e}]`,
+          tool_call_id: tu.id
+        })
       }
     }
   }
@@ -99,24 +235,47 @@ export async function runAgent(userInput: string) {
 export async function approveTool(messageId: string) {
   const store = useAIStore()
   const msg = store.messages.find(m => m.id === messageId)
-  if (!msg?.pendingTool) return
+  if (!msg?.pendingTools?.length) return
+
+  const pendingTool = msg.pendingTools[0]
+
+  if (!hasActiveSession()) {
+    store.addMessage({
+      id: `msg-${Date.now()}`,
+      role: 'assistant',
+      content: '请先打开一个终端会话，再执行此命令。'
+    })
+    return
+  }
 
   store.isRunning = true
 
-  const { id, arguments: args } = msg.pendingTool
+  const { id, arguments: args } = pendingTool
   const command = args.command as string
 
-  delete msg.pendingTool
-
-  const result = await executeCommand(command)
-
-  const toolResult: AIMessage = {
-    id: `msg-${Date.now()}`,
-    role: 'tool',
-    content: result.output,
-    tool_call_id: id
+  try {
+    const result = await executeCommand(command)
+    store.addMessage({
+      id: `msg-${Date.now()}`,
+      role: 'tool',
+      content: result.output,
+      tool_call_id: id
+    })
+  } catch (e: any) {
+    store.addMessage({
+      id: `msg-${Date.now()}`,
+      role: 'tool',
+      content: `[Error executing command: ${e.message ?? e}]`,
+      tool_call_id: id
+    })
   }
-  store.addMessage(toolResult)
+
+  msg.pendingTools.shift()
+
+  if (msg.pendingTools.length > 0) {
+    store.isRunning = false
+    return
+  }
 
   await runAgent('')
 }
@@ -124,16 +283,22 @@ export async function approveTool(messageId: string) {
 export function rejectTool(messageId: string) {
   const store = useAIStore()
   const msg = store.messages.find(m => m.id === messageId)
-  if (!msg?.pendingTool) return
+  if (!msg?.pendingTools?.length) return
 
-  const toolCallId = msg.pendingTool.id
-  delete msg.pendingTool
+  const pendingTool = msg.pendingTools[0]
 
-  const toolResult: AIMessage = {
+  store.addMessage({
     id: `msg-${Date.now()}`,
     role: 'tool',
     content: 'User rejected this command.',
-    tool_call_id: toolCallId
+    tool_call_id: pendingTool.id
+  })
+
+  msg.pendingTools.shift()
+
+  if (msg.pendingTools.length > 0) {
+    return
   }
-  store.addMessage(toolResult)
+
+  setTimeout(() => runAgent(''), 0)
 }

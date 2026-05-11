@@ -1,19 +1,21 @@
 import { ChatCompletion } from '../../wailsjs/go/main/App'
 import { useAIStore } from '../stores/aiStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import type { AIMessage } from '../types/ai'
 
 export interface ChatOptions {
-  messages: Array<{ role: string; content: string; tool_calls?: any; tool_call_id?: string }>
+  system: string
+  messages: Array<Record<string, unknown>>
   tools?: Array<{
-    type: 'function'
-    function: { name: string; description: string; parameters: object }
+    name: string
+    description: string
+    input_schema: object
   }>
   onChunk?: (chunk: string) => void
-  onToolCall?: (toolCall: { id: string; function: { name: string; arguments: string } }) => void
+  onToolUse?: (tool: { id: string; name: string; input: Record<string, unknown> }) => void
 }
 
-function addDebugLog(store: ReturnType<typeof useAIStore>, text: string) {
-  if (!store.debug) return
+export function addDebugLog(store: ReturnType<typeof useAIStore>, text: string) {
   const msg: AIMessage = {
     id: `dbg-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
     role: 'tool',
@@ -22,32 +24,46 @@ function addDebugLog(store: ReturnType<typeof useAIStore>, text: string) {
   store.addMessage(msg)
 }
 
-export async function chat(options: ChatOptions): Promise<string> {
+export async function chat(options: ChatOptions): Promise<void> {
   const store = useAIStore()
-  const { apiKey, baseURL, model } = store.config
+  const settingsStore = useSettingsStore()
+  const activeModel = settingsStore.activeModel
+
+  const apiKey = activeModel?.apiKey || ''
+  const baseURL = activeModel?.baseURL || ''
+  const model = activeModel?.model || ''
 
   if (!apiKey) throw new Error('API key not configured')
 
-  const requestBody = {
+  const requestBody: Record<string, unknown> = {
     model,
+    max_tokens: 4096,
+    system: options.system,
     messages: options.messages,
-    tools: options.tools,
-    tool_choice: options.tools ? 'auto' : undefined,
-    stream: false
+    tools: options.tools
   }
 
   const requestJSON = JSON.stringify(requestBody)
-  addDebugLog(store, `Request body:\n${JSON.stringify(requestBody, null, 2)}`)
+
+  // Debug: log request (truncate content)
+  const debugMsgs = (requestBody.messages as Array<Record<string, unknown>>).map((m: any) => ({
+    ...m,
+    content: typeof m.content === 'string'
+      ? m.content.slice(0, 200) + (m.content.length > 200 ? '...[truncated]' : '')
+      : m.content
+  }))
+  addDebugLog(store, `REQ → ${JSON.stringify({ ...requestBody, messages: debugMsgs }, null, 2)}`)
 
   let responseText: string
   try {
-    responseText = await ChatCompletion(apiKey, baseURL, model, requestJSON)
+    responseText = await ChatCompletion(apiKey, baseURL, model, requestJSON, 'anthropic')
   } catch (e: any) {
     addDebugLog(store, `Request failed: ${e}`)
     throw new Error(`LLM API request failed: ${e}`)
   }
 
-  addDebugLog(store, `Response:\n${responseText.slice(0, 4000)}`)
+  // Debug: log raw response (truncated)
+  addDebugLog(store, `RES ← ${responseText.length > 500 ? responseText.slice(0, 500) + '...[truncated]' : responseText}`)
 
   let json: any
   try {
@@ -63,50 +79,51 @@ export async function chat(options: ChatOptions): Promise<string> {
     throw new Error(`LLM API error: ${errMsg}`)
   }
 
-  const choice = json.choices?.[0]
-  if (!choice) {
-    addDebugLog(store, 'No choices in response')
-    throw new Error('No choices in LLM response')
+  // Anthropic response: { id, type, role, content: [...], model, stop_reason, usage }
+  const rawContent = json.content
+  if (!Array.isArray(rawContent)) {
+    addDebugLog(store, 'Response content is not an array')
+    throw new Error('Unexpected Anthropic response: content is not an array')
   }
 
-  const message = choice.message
-  if (!message) {
-    addDebugLog(store, 'No message in choice')
-    throw new Error('No message in LLM response')
+  // Store raw message for history preservation
+  ;(options as any)._rawApiMsg = {
+    role: json.role,
+    content: rawContent
   }
 
-  const content = message.content || ''
-  const toolCalls = message.tool_calls || []
+  addDebugLog(store, `Raw content blocks: ${rawContent.map((b: any) => b.type).join(', ')} | stop_reason: ${json.stop_reason}`)
 
-  for (const tc of toolCalls) {
-    if (tc.function?.name) {
-      options.onToolCall?.({ id: tc.id, function: tc.function })
+  // Dispatch text and tool_use blocks
+  for (const block of rawContent) {
+    switch (block.type) {
+      case 'text':
+        options.onChunk?.(block.text || '')
+        break
+      case 'tool_use':
+        options.onToolUse?.({
+          id: block.id,
+          name: block.name,
+          input: block.input || {}
+        })
+        break
     }
   }
-
-  if (content) {
-    options.onChunk?.(content)
-  }
-
-  return content
 }
 
 export const AVAILABLE_TOOLS = [
   {
-    type: 'function' as const,
-    function: {
-      name: 'execute_command',
-      description: 'Execute a shell command in the active terminal session and return its output.',
-      parameters: {
-        type: 'object',
-        properties: {
-          command: {
-            type: 'string',
-            description: 'The shell command to execute. Use standard Unix syntax.'
-          }
-        },
-        required: ['command']
-      }
+    name: 'execute_command',
+    description: 'Execute a shell command in the active terminal session and return its output.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description: 'The shell command to execute. Use standard Unix syntax.'
+        }
+      },
+      required: ['command']
     }
   }
 ]

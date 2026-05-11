@@ -3,7 +3,7 @@ export type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'error
 export interface ConnectionConfig {
   id: string
   name: string
-  type: 'ssh' | 'sftp' | 'mysql' | 'redis'
+  type: 'ssh'
   host: string
   port: number
   user: string
@@ -23,7 +23,9 @@ export interface Tab {
   id: string
   sessionId: string
   title: string
-  type: 'ssh' | 'sftp'
+  type: 'ssh' | 'settings'
+  groupId?: string
+  config?: ConnectionConfig
 }
 
 export interface SplitNode {

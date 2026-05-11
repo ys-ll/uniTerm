@@ -1,9 +1,10 @@
 <template>
-  <div class="ai-sidebar" :class="{ collapsed: !aiStore.visible }">
+  <div ref="sidebarEl" class="ai-sidebar" :class="{ collapsed: !aiStore.visible, resizing: isResizing }" :style="{ width: sidebarWidth + 'px' }">
+    <div class="resize-handle" @mousedown="onResizeStart" />
     <div class="ai-header">
-      <span>AI Assistant</span>
+      <span>{{ t('ai.title') }}</span>
       <div class="ai-actions">
-        <el-button link size="small" @click="showSettings = true">
+        <el-button link size="small" @click="openGlobalSettings" :title="t('settings.ai')">
           <el-icon><Setting /></el-icon>
         </el-button>
         <el-button link size="small" @click="aiStore.toggle">
@@ -12,70 +13,182 @@
       </div>
     </div>
 
-    <div class="ai-mode-toggle">
-      <el-segmented v-model="aiStore.mode" :options="[
-        { label: 'Auto', value: 'autonomous' },
-        { label: 'Confirm', value: 'confirm' }
-      ]" size="small" />
-      <el-checkbox v-model="aiStore.debug" size="small">Debug</el-checkbox>
+    <div class="ai-session-bar">
+      <el-dropdown trigger="click" @command="onSessionCommand">
+        <div class="session-trigger">
+          <span class="session-name">{{ currentSessionName }}</span>
+          <el-icon><ArrowDown /></el-icon>
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu class="dark-dropdown">
+            <el-dropdown-item command="new">
+              <el-icon><Plus /></el-icon> {{ t('ai.newSession') }}
+            </el-dropdown-item>
+            <el-dropdown-item divided v-if="aiStore.sessions.length > 0" disabled>
+              {{ t('ai.recentSessions') }}
+            </el-dropdown-item>
+            <el-dropdown-item
+              v-for="s in aiStore.sessions"
+              :key="s.id"
+              :command="s.id"
+              :class="{ active: s.id === aiStore.currentSessionId }"
+            >
+              <span class="session-item-name">{{ s.name }}</span>
+              <span class="session-time">{{ formatRelativeTime(s.updatedAt) }}</span>
+              <el-icon class="session-delete" @click.stop="aiStore.deleteSession(s.id)"><Delete /></el-icon>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-checkbox v-model="aiStore.debug" size="small" class="debug-check">{{ t('ai.debug') }}</el-checkbox>
     </div>
 
     <div ref="messagesRef" class="ai-messages">
       <AIMessage
-        v-for="msg in aiStore.messages"
+        v-for="msg in aiStore.messages.filter(m => m.role !== 'tool' || (m.id.startsWith('dbg-') && aiStore.debug))"
         :key="msg.id"
         :message="msg"
         @approve="onApprove"
         @reject="onReject"
       />
-      <div v-if="aiStore.isRunning" class="ai-thinking">Thinking...</div>
+      <div v-if="aiStore.isRunning" class="ai-thinking">{{ t('ai.thinking') }}</div>
     </div>
 
     <div class="ai-input">
-      <el-input
-        v-model="input"
-        type="textarea"
-        :rows="2"
-        placeholder="Ask the AI to do something..."
-        @keydown.enter.prevent="onSend"
-      />
-      <el-button type="primary" :disabled="!input.trim() || aiStore.isRunning" @click="onSend">
-        Send
-      </el-button>
+      <div class="textarea-wrap">
+        <el-input
+          v-model="input"
+          type="textarea"
+          :rows="4"
+          :placeholder="t('ai.placeholder')"
+          @keydown.enter="onKeydownEnter"
+        />
+        <div class="input-actions">
+          <el-dropdown trigger="click" @command="onModelChange" size="small" v-if="settingsStore.settings.ai.models.length > 0">
+            <el-button size="small" class="model-btn">
+              <span class="model-btn-name">{{ currentModelName }}</span>
+              <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu class="dark-dropdown">
+                <el-dropdown-item
+                  v-for="m in settingsStore.settings.ai.models"
+                  :key="m.id"
+                  :command="m.id"
+                  :class="{ active: m.id === settingsStore.settings.ai.activeModelId }"
+                >
+                  {{ m.name }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-dropdown trigger="click" @command="onModeChange" size="small">
+            <el-button :type="modeButtonType" size="small">
+              {{ modeLabel }}<el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu class="dark-dropdown">
+                <el-dropdown-item command="confirm_all">
+                  <span class="mode-option mode-confirm">{{ t('ai.confirmAll') }}</span>
+                </el-dropdown-item>
+                <el-dropdown-item command="confirm_dangerous">
+                  <span class="mode-option mode-warning">{{ t('ai.confirmDangerous') }}</span>
+                </el-dropdown-item>
+                <el-dropdown-item command="bypass">
+                  <span class="mode-option mode-auto">{{ t('ai.bypass') }}</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button v-if="!aiStore.isRunning" type="primary" size="small" :disabled="!input.trim()" @click="onSend">
+            {{ t('ai.send') }}
+          </el-button>
+          <el-button v-else type="danger" size="small" @click="onStop">{{ t('ai.stop') }}</el-button>
+        </div>
+      </div>
     </div>
 
-    <!-- Settings drawer -->
-    <el-dialog v-model="showSettings" title="AI Settings" width="400px">
-      <el-form label-width="100px">
-        <el-form-item label="API Key">
-          <el-input v-model="aiStore.config.apiKey" type="password" show-password />
-        </el-form-item>
-        <el-form-item label="Base URL">
-          <el-input v-model="aiStore.config.baseURL" />
-        </el-form-item>
-        <el-form-item label="Model">
-          <el-input v-model="aiStore.config.model" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showSettings = false">Close</el-button>
-        <el-button type="primary" @click="saveSettings">Save</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
-import { Setting, Close } from '@element-plus/icons-vue'
+import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { Setting, Close, ArrowDown, Plus, Delete } from '@element-plus/icons-vue'
 import { useAIStore } from '../stores/aiStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { useTabStore } from '../stores/tabStore'
+import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool } from '../services/agent'
+import type { ExecutionMode, AIConfig } from '../types/ai'
 import AIMessage from './AIMessage.vue'
 
 const aiStore = useAIStore()
+const settingsStore = useSettingsStore()
+const tabStore = useTabStore()
+const { t } = useI18n()
 const input = ref('')
 const messagesRef = ref<HTMLDivElement>()
-const showSettings = ref(false)
+const sidebarWidth = ref(360)
+const isResizing = ref(false)
+const sidebarEl = ref<HTMLDivElement>()
+
+const currentSessionName = computed(() => {
+  const s = aiStore.sessions.find(s => s.id === aiStore.currentSessionId)
+  return s?.name || t('ai.newSession')
+})
+
+const modeLabel = computed(() => {
+  switch (aiStore.mode) {
+    case 'bypass': return t('ai.bypass')
+    case 'confirm_dangerous': return t('ai.confirmDangerous')
+    default: return t('ai.confirmAll')
+  }
+})
+
+const modeButtonType = computed(() => {
+  switch (aiStore.mode) {
+    case 'bypass': return 'danger'
+    case 'confirm_dangerous': return 'warning'
+    default: return 'success'
+  }
+})
+
+const currentModelName = computed(() => {
+  const m = settingsStore.settings.ai.models.find(m => m.id === settingsStore.settings.ai.activeModelId)
+  return m?.name || 'Model'
+})
+
+function onModeChange(mode: string) {
+  aiStore.mode = mode as ExecutionMode
+}
+
+function onModelChange(modelId: string) {
+  settingsStore.setActiveModel(modelId)
+  const model = settingsStore.settings.ai.models.find(m => m.id === modelId)
+  if (model) {
+    aiStore.setConfig({
+      apiKey: model.apiKey,
+      baseURL: model.baseURL,
+      model: model.model,
+    })
+  }
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return t('ai.justNow')
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return t('ai.minutesAgo', { n: minutes })
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return t('ai.hoursAgo', { n: hours })
+  const days = Math.floor(hours / 24)
+  if (days < 30) return t('ai.daysAgo', { n: days })
+  const months = Math.floor(days / 30)
+  if (months < 12) return t('ai.monthsAgo', { n: months })
+  const years = Math.floor(months / 12)
+  return t('ai.yearsAgo', { n: years })
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -83,6 +196,23 @@ function scrollToBottom() {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight
     }
   })
+}
+
+function onSessionCommand(command: string) {
+  if (command === 'new') {
+    aiStore.createSession()
+  } else {
+    aiStore.switchSession(command)
+  }
+}
+
+function onKeydownEnter(e: KeyboardEvent) {
+  if (e.shiftKey) {
+    // Allow default newline behavior
+    return
+  }
+  e.preventDefault()
+  onSend()
 }
 
 async function onSend() {
@@ -94,55 +224,222 @@ async function onSend() {
   scrollToBottom()
 }
 
+function onStop() {
+  aiStore.stop()
+}
+
 async function onApprove(messageId: string) {
+  console.log('[DEBUG] onApprove clicked, messageId=', messageId)
   await approveTool(messageId)
   scrollToBottom()
 }
 
 function onReject(messageId: string) {
+  console.log('[DEBUG] onReject clicked, messageId=', messageId)
   rejectTool(messageId)
   scrollToBottom()
 }
 
-function saveSettings() {
-  aiStore.saveConfig()
-  showSettings.value = false
+function openGlobalSettings() {
+  settingsStore.openCategory = 'ai'
+  const existing = tabStore.tabs.find(t => t.type === 'settings')
+  if (existing) {
+    tabStore.setActiveTab(existing.id)
+    return
+  }
+  const tabId = `tab-settings-${Date.now()}`
+  const groupId = tabStore.activeTab?.groupId || 'default'
+  tabStore.addTab({
+    id: tabId,
+    sessionId: '',
+    title: t('settings.title'),
+    type: 'settings',
+    groupId
+  }, groupId)
 }
+
+function onResizeStart(e: MouseEvent) {
+  isResizing.value = true
+  const el = sidebarEl.value
+  if (!el) return
+  const startX = e.clientX
+  const startWidth = el.offsetWidth
+
+  function onMouseMove(ev: MouseEvent) {
+    if (!isResizing.value) return
+    const delta = startX - ev.clientX
+    const newWidth = Math.min(Math.max(startWidth + delta, 240), 800)
+    sidebarWidth.value = newWidth
+    el.style.width = newWidth + 'px'
+  }
+
+  function onMouseUp() {
+    isResizing.value = false
+    sidebarWidth.value = el.offsetWidth
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
+function onAskAI(e: Event) {
+  const text = (e as CustomEvent).detail as string
+  if (text) {
+    input.value = text
+    if (!aiStore.visible) {
+      aiStore.visible = true
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('ai:ask', onAskAI)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('ai:ask', onAskAI)
+})
 </script>
 
 <style scoped>
 .ai-sidebar {
-  width: 360px;
-  background: #252526;
-  border-left: 1px solid #3d3d3d;
+  background: var(--bg-elevated);
   display: flex;
   flex-direction: column;
-  transition: width 0.2s;
+  position: relative;
+  flex-shrink: 0;
 }
 .ai-sidebar.collapsed {
-  width: 0;
+  width: 0 !important;
   overflow: hidden;
+}
+.ai-sidebar.resizing {
+  transition: none;
+}
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.resize-handle:hover {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 .ai-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #e0e0e0;
-  border-bottom: 1px solid #3d3d3d;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
 }
 .ai-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
-.ai-mode-toggle {
-  padding: 8px 12px;
-  border-bottom: 1px solid #3d3d3d;
+.ai-session-bar {
+  padding: 6px 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
+}
+.debug-check {
+  color: var(--text-muted);
+}
+.debug-check :deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
+  color: var(--text-secondary);
+}
+.session-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  transition: all 0.12s ease;
+}
+.session-trigger:hover {
+  background: var(--bg-hover);
+  box-shadow: inset 0 0 0 1px var(--border-hover);
+}
+.session-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-time {
+  margin-left: 8px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.session-delete {
+  margin-left: 8px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: var(--text-muted);
+}
+.session-delete:hover {
+  color: var(--text-primary);
+}
+:deep(.el-dropdown-menu__item) {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-ui);
+}
+:deep(.el-dropdown-menu__item:hover .session-delete) {
+  opacity: 1;
+}
+:deep(.el-dropdown-menu__item.active) {
+  background: rgba(52, 211, 153, 0.08);
+  color: var(--success);
+}
+
+:deep(.dark-dropdown) {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+:deep(.dark-dropdown .el-dropdown-menu__item) {
+  color: var(--text-secondary);
+}
+:deep(.dark-dropdown .el-dropdown-menu__item.is-disabled) {
+  color: var(--text-disabled);
+}
+:deep(.dark-dropdown .el-dropdown-menu__item:not(.is-disabled):hover) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+:deep(.dark-dropdown .el-dropdown-menu__item.divided) {
+  border-top: 1px solid var(--border-subtle);
+}
+:deep(.dark-dropdown .el-dropdown-menu__item.divided::before) {
+  background-color: var(--border-subtle);
 }
 .ai-messages {
   flex: 1;
@@ -150,16 +447,58 @@ function saveSettings() {
   padding: 8px 0;
 }
 .ai-thinking {
-  padding: 8px 12px;
-  font-size: 12px;
-  color: #858585;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-family: var(--font-ui);
+  color: var(--text-muted);
   font-style: italic;
 }
 .ai-input {
-  padding: 8px 12px;
-  border-top: 1px solid #3d3d3d;
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+.textarea-wrap {
+  position: relative;
+}
+.textarea-wrap :deep(.el-textarea__inner) {
+  padding-bottom: 36px;
+}
+.input-actions {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
   display: flex;
-  flex-direction: column;
   gap: 8px;
+  align-items: center;
+  z-index: 2;
+}
+.dropdown-icon {
+  margin-left: 4px;
+}
+.model-btn {
+  padding-left: 8px;
+  padding-right: 6px;
+}
+.model-btn-name {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+.mode-option {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-ui);
+}
+.mode-auto {
+  color: var(--error);
+}
+.mode-confirm {
+  color: var(--success);
+}
+.mode-warning {
+  color: var(--warning);
 }
 </style>

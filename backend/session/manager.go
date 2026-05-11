@@ -28,8 +28,6 @@ func (sm *SessionManager) Create(sessionType string, config ConnectionConfig) (S
 	switch sessionType {
 	case "ssh":
 		s = NewSSHSession(config.ID)
-	case "sftp":
-		s = NewSFTPSession(config.ID)
 	default:
 		return nil, fmt.Errorf("unsupported session type: %s", sessionType)
 	}

@@ -2,16 +2,35 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"os"
+	"runtime/debug"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"uniTerm/backend/log"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
+	// Capture top-level panics
+	defer func() {
+		if r := recover(); r != nil {
+			_ = log.Init()
+			log.Writef("FATAL PANIC: %v\n%s", r, string(debug.Stack()))
+			log.Close()
+			os.Exit(1)
+		}
+	}()
+
+	if err := log.Init(); err != nil {
+		println("Failed to init log:", err.Error())
+	}
+	defer log.Close()
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{
@@ -30,6 +49,7 @@ func main() {
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		fmt.Println("Error:", err.Error())
+		log.Writef("Wails run error: %v", err)
 	}
 }

@@ -40,6 +40,7 @@ type Session interface {
 	Connect(config ConnectionConfig) error
 	Disconnect() error
 	IsConnected() bool
+	Resize(cols, rows int) error
 
 	Write(data []byte) error
 	SetOnDataCallback(cb func([]byte))

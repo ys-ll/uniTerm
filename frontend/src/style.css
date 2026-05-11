@@ -1,3 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Core palette - industrial dark */
+  --bg-base: #121214;
+  --bg-elevated: #18181b;
+  --bg-surface: #1e1e22;
+  --bg-overlay: #27272a;
+  --bg-hover: #2a2a2e;
+  --bg-active: #323236;
+
+  /* Text */
+  --text-primary: #e8e8ec;
+  --text-secondary: #a4a4ac;
+  --text-muted: #6e6e78;
+  --text-disabled: #4a4a52;
+
+  /* Accent - electric cyan */
+  --accent: #22d3ee;
+  --accent-dim: #0891b2;
+  --accent-glow: rgba(34, 211, 238, 0.15);
+  --accent-subtle: rgba(34, 211, 238, 0.08);
+
+  /* Semantic */
+  --success: #34d399;
+  --success-dim: #059669;
+  --warning: #fbbf24;
+  --error: #f87171;
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-hover: rgba(255, 255, 255, 0.08);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* Fonts */
+  --font-ui: 'Space Grotesk', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Spacing */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Element Plus theme overrides */
+  --el-bg-color: #121214;
+  --el-bg-color-page: #121214;
+  --el-fill-color-blank: #1e1e22;
+  --el-fill-color: #18181b;
+  --el-fill-color-light: #27272a;
+  --el-fill-color-lighter: #2a2a2e;
+  --el-text-color-primary: #e8e8ec;
+  --el-text-color-regular: #a4a4ac;
+  --el-text-color-secondary: #6e6e78;
+  --el-text-color-placeholder: #4a4a52;
+  --el-border-color: rgba(255, 255, 255, 0.08);
+  --el-border-color-light: rgba(255, 255, 255, 0.06);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.04);
+}
+
+/* Deep blue - oceanic dark */
+[data-theme="deep-blue"] {
+  --bg-base: #060b14;
+  --bg-elevated: #0b1120;
+  --bg-surface: #0f1629;
+  --bg-overlay: #141c32;
+  --bg-hover: #18223e;
+  --bg-active: #1e2a4a;
+
+  --text-primary: #e2e8f4;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-disabled: #475569;
+
+  --accent: #38bdf8;
+  --accent-dim: #0284c7;
+  --accent-glow: rgba(56, 189, 248, 0.18);
+  --accent-subtle: rgba(56, 189, 248, 0.08);
+
+  --success: #34d399;
+  --success-dim: #059669;
+  --warning: #fbbf24;
+  --error: #f87171;
+
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-hover: rgba(255, 255, 255, 0.1);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  --el-bg-color: #060b14;
+  --el-bg-color-page: #060b14;
+  --el-fill-color-blank: #0f1629;
+  --el-fill-color: #0b1120;
+  --el-fill-color-light: #141c32;
+  --el-fill-color-lighter: #18223e;
+  --el-text-color-primary: #e2e8f4;
+  --el-text-color-regular: #94a3b8;
+  --el-text-color-secondary: #64748b;
+  --el-text-color-placeholder: #475569;
+  --el-border-color: rgba(255, 255, 255, 0.1);
+  --el-border-color-light: rgba(255, 255, 255, 0.07);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="light"] {
+  /* Core palette - warm instrument */
+  --bg-base: #fdfbf7;
+  --bg-elevated: #f7f3ec;
+  --bg-surface: #ede7dd;
+  --bg-overlay: #e3dcd0;
+  --bg-hover: #dfd6c8;
+  --bg-active: #d4c9b6;
+
+  /* Text - warm ink tones */
+  --text-primary: #1e1b18;
+  --text-secondary: #5c5549;
+  --text-muted: #8a8174;
+  --text-disabled: #c2b9aa;
+
+  /* Accent - rich amber gold */
+  --accent: #f0a04a;
+  --accent-dim: #d4822a;
+  --accent-glow: rgba(240, 160, 74, 0.22);
+  --accent-subtle: rgba(240, 160, 74, 0.08);
+
+  /* Semantic */
+  --success: #4a9b6d;
+  --success-dim: #3a7d56;
+  --warning: #d4822a;
+  --error: #d1504a;
+
+  /* Borders - subtle warm */
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border-hover: rgba(0, 0, 0, 0.1);
+
+  /* Shadows - softer, warmer cast */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.09);
+
+  /* Element Plus light theme overrides */
+  --el-bg-color: #fdfbf7;
+  --el-bg-color-page: #fdfbf7;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color: #f7f3ec;
+  --el-fill-color-light: #ede7dd;
+  --el-fill-color-lighter: #e3dcd0;
+  --el-text-color-primary: #1e1b18;
+  --el-text-color-regular: #5c5549;
+  --el-text-color-secondary: #8a8174;
+  --el-text-color-placeholder: #c2b9aa;
+  --el-border-color: rgba(0, 0, 0, 0.1);
+  --el-border-color-light: rgba(0, 0, 0, 0.07);
+  --el-border-color-lighter: rgba(0, 0, 0, 0.05);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -11,7 +172,184 @@ html, body, #app {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #1e1e1e;
-  color: #e0e0e0;
+  font-family: var(--font-ui);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Noise texture overlay for atmosphere */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px;
+}
+
+[data-theme="light"] body::before {
+  opacity: 0.006;
+}
+
+/* Scrollbar - minimal */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* Element Plus dark theme overrides */
+.el-dialog {
+  background: var(--bg-surface) !important;
+  border: none !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+.el-dialog__header {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 16px 20px;
+}
+.el-dialog__title,
+.el-dialog__headerbtn .el-dialog__close {
+  color: var(--text-primary) !important;
+  font-family: var(--font-ui);
+}
+.el-dialog__body {
+  color: var(--text-primary);
+  padding: 20px;
+}
+
+.el-form-item__label {
+  color: var(--text-secondary) !important;
+  font-family: var(--font-ui);
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  background-color: var(--bg-base) !important;
+  box-shadow: 0 0 0 1px var(--border-subtle) inset !important;
+  border-radius: var(--radius-sm) !important;
+  transition: box-shadow 0.15s ease;
+}
+.el-input__wrapper:hover,
+.el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px var(--border-hover) inset !important;
+}
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--accent-dim) inset, 0 0 0 3px var(--accent-glow) !important;
+}
+.el-input__inner,
+.el-textarea__inner {
+  color: var(--text-primary) !important;
+  font-family: var(--font-ui);
+}
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.el-input-number .el-input__wrapper {
+  background-color: var(--bg-base) !important;
+}
+
+.el-select .el-input.is-focus .el-input__wrapper {
+  box-shadow: 0 0 0 1px var(--accent-dim) inset, 0 0 0 3px var(--accent-glow) !important;
+}
+
+.el-select-dropdown {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.el-select-dropdown__item {
+  color: var(--text-secondary) !important;
+  font-family: var(--font-ui);
+}
+.el-select-dropdown__item.hover,
+.el-select-dropdown__item:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+.el-select-dropdown__item.selected {
+  color: var(--accent) !important;
+  background: var(--accent-subtle) !important;
+}
+
+.el-radio-button__inner {
+  background: var(--bg-base) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-ui);
+}
+.el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background-color: var(--accent-dim) !important;
+  border-color: var(--accent-dim) !important;
+  color: #fff !important;
+  box-shadow: -1px 0 0 0 var(--accent-dim) !important;
+}
+
+.el-button {
+  font-family: var(--font-ui);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+.el-button--primary {
+  background: var(--accent-dim) !important;
+  border-color: var(--accent-dim) !important;
+}
+.el-button--primary:hover {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.el-dropdown-menu {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.el-dropdown-menu__item {
+  color: var(--text-secondary) !important;
+  font-family: var(--font-ui);
+}
+.el-dropdown-menu__item:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Tab transitions */
+.tab-fade-enter-active,
+.tab-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.tab-fade-enter-from,
+.tab-fade-leave-to {
+  opacity: 0;
 }
