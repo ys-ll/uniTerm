@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"uniTerm/backend/log"
-	"uniTerm/backend/session"
-	"uniTerm/backend/store"
+	"github.com/ys-ll/uniTerm/backend/log"
+	"github.com/ys-ll/uniTerm/backend/session"
+	"github.com/ys-ll/uniTerm/backend/store"
 )
 
 type App struct {

@@ -44,8 +44,8 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm install
 
-      - name: Tidy Go modules
-        run: go mod tidy
+      - name: Pre-compile Go packages
+        run: go build ./...
 
       - name: Install Linux dependencies
         if: matrix.platform == 'linux/amd64'
