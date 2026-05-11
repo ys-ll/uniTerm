@@ -45,7 +45,7 @@ jobs:
         run: cd frontend && npm install
 
       - name: Pre-compile Go packages
-        run: go build ./...
+        run: GOWORK=off go build ./backend/...
 
       - name: Install Linux dependencies
         if: matrix.platform == 'linux/amd64'
