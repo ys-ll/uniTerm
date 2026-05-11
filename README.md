@@ -44,7 +44,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/ys-ll/uniTerm.git
+git clone https://github.com/ys-ll/uniterm.git
 cd uniTerm
 
 # Install frontend dependencies

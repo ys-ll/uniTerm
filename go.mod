@@ -1,4 +1,4 @@
-module github.com/ys-ll/uniTerm
+module github.com/ys-ll/uniterm
 
 go 1.23.0
 

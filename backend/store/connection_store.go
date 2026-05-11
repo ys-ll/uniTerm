@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ys-ll/uniTerm/backend/session"
+	"github.com/ys-ll/uniterm/backend/session"
 )
 
 const storeFileName = "connections.json"
