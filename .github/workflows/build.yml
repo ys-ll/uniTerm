@@ -68,10 +68,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
 
-      - name: Install NSIS (Windows)
-        if: matrix.platform == 'windows/amd64'
-        run: choco install nsis -y
-
       - name: Prepare app icon
         run: mkdir -p build && cp appicon.png build/appicon.png
 
@@ -94,6 +90,9 @@ jobs:
       - name: Build NSIS installer (Windows)
         if: matrix.platform == 'windows/amd64'
         run: |
+          choco install nsis -y
+          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1" -ErrorAction SilentlyContinue
+          refreshenv
           makensis -DVERSION=$env:VERSION installer/windows/project.nsi
           mv uniTerm-amd64-installer.exe ./uniterm-windows-amd64-installer-$env:VERSION.exe
 
