@@ -87,19 +87,15 @@ jobs:
           ditto -c -k --keepParent uniTerm.app ../../uniterm-darwin-universal-${VERSION}.zip
           hdiutil create -volname uniTerm -srcfolder uniTerm.app -ov -format UDZO ../../uniterm-darwin-universal-${VERSION}.dmg
 
-      - name: Install NSIS (Windows)
-        if: matrix.platform == 'windows/amd64'
-        shell: bash
-        run: |
-          choco install nsis -y --no-progress
-          echo "C:/Program Files (x86)/NSIS" >> $GITHUB_PATH
-
       - name: Build NSIS installer (Windows)
         if: matrix.platform == 'windows/amd64'
-        shell: bash
         run: |
-          makensis -DVERSION=$VERSION installer/windows/project.nsi
-          mv uniTerm-amd64-installer.exe ./uniterm-windows-amd64-installer-$VERSION.exe
+          $nsisZip = "$env:TEMP\nsis.zip"
+          $nsisDir = "$env:TEMP\nsis"
+          Invoke-WebRequest -Uri "https://github.com/kichik/nsis/releases/download/v3.10/nsis-3.10.zip" -OutFile $nsisZip
+          Expand-Archive -Path $nsisZip -DestinationPath $nsisDir
+          & "$nsisDir\makensis.exe" -DVERSION=$env:VERSION installer/windows/project.nsi
+          mv uniTerm-amd64-installer.exe ./uniterm-windows-amd64-installer-$env:VERSION.exe
 
       - name: Package (Windows)
         if: matrix.platform == 'windows/amd64'
