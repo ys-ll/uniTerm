@@ -73,16 +73,21 @@ jobs:
         shell: bash
         run: |
           choco install nsis -y
-          MAKENSIS=$(find /c/Program\ Files* /c/ProgramData -name makensis.exe -type f 2>/dev/null | head -1)
-          if [ -z "$MAKENSIS" ]; then echo "ERROR: makensis.exe not found"; exit 1; fi
-          echo "makensis: $MAKENSIS"
-          echo "$(dirname "$MAKENSIS")" >> $GITHUB_PATH
+          NSIS_BIN="/c/Program Files (x86)/NSIS/Bin"
+          if [ ! -f "$NSIS_BIN/makensis.exe" ]; then echo "ERROR: makensis.exe not found at $NSIS_BIN"; exit 1; fi
+          echo "makensis: $NSIS_BIN/makensis.exe"
 
       - name: Prepare app icon
         run: mkdir -p build && cp appicon.png build/appicon.png
 
       - name: Build
-        run: wails build -platform ${{ matrix.platform }} -ldflags "-s -w" -skipbindings ${{ matrix.platform == 'windows/amd64' && '-nsis' || '' }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "windows/amd64" ]; then
+            export PATH="/c/Program Files (x86)/NSIS/Bin:$PATH"
+          fi
+          echo "PATH=$PATH"
+          wails build -platform ${{ matrix.platform }} -ldflags "-s -w" -skipbindings ${{ matrix.platform == 'windows/amd64' && '-nsis' || '' }}
 
       - name: Fix macOS permissions and sign
         if: matrix.platform == 'darwin/universal'
