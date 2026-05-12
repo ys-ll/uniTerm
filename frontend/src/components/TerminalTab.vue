@@ -7,11 +7,14 @@
     :style="menuStyle"
     @click.stop
   >
+    <div class="menu-item" :class="{ disabled: !hasSelection }" @click="askAI">
+      {{ t('terminal.askAI') }}
+    </div>
     <div class="menu-item" :class="{ disabled: !hasSelection }" @click="copySelection">
       {{ t('terminal.copy') }}
     </div>
-    <div class="menu-item" :class="{ disabled: !hasSelection }" @click="askAI">
-      {{ t('terminal.askAI') }}
+    <div class="menu-item" :class="{ disabled: !hasSelection }" @click="copyAndPaste">
+      {{ t('terminal.copyAndPaste') }}
     </div>
     <div class="menu-item" @click="pasteFromClipboard">{{ t('terminal.paste') }}</div>
   </div>
@@ -230,8 +233,16 @@ function onContextMenu(e: MouseEvent) {
   e.stopPropagation()
   window.dispatchEvent(new CustomEvent('global:close-context-menus'))
   hasSelection.value = !!terminal?.getSelection()
-  menuStyle.value = { left: e.clientX + 'px', top: e.clientY + 'px' }
+  menuStyle.value = fitMenuPosition(e.clientX, e.clientY, 120, 140)
   menuVisible.value = true
+}
+
+function fitMenuPosition(x: number, y: number, menuW: number, menuH: number) {
+  let left = x
+  let top = y
+  if (x + menuW > window.innerWidth) left = x - menuW
+  if (y + menuH > window.innerHeight) top = y - menuH
+  return { left: left + 'px', top: top + 'px' }
 }
 
 function closeMenu() {
@@ -242,6 +253,17 @@ function copySelection() {
   const text = terminal?.getSelection()
   if (text) {
     navigator.clipboard.writeText(text)
+  }
+  closeMenu()
+}
+
+async function copyAndPaste() {
+  const text = terminal?.getSelection()
+  if (text) {
+    await navigator.clipboard.writeText(text)
+    if (props.tab.sessionId) {
+      SessionWrite(props.tab.sessionId, text)
+    }
   }
   closeMenu()
 }
@@ -408,6 +430,8 @@ onUnmounted(() => {
   padding: 6px 8px;
   contain: strict;
   overflow: hidden;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Hide terminal content during window resize */

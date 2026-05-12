@@ -43,7 +43,7 @@
       <el-checkbox v-model="aiStore.debug" size="small" class="debug-check">{{ t('ai.debug') }}</el-checkbox>
     </div>
 
-    <div ref="messagesRef" class="ai-messages">
+    <div ref="messagesRef" class="ai-messages" @contextmenu="onAIContextMenu">
       <AIMessage
         v-for="msg in aiStore.messages.filter(m => m.role !== 'tool' || (m.id.startsWith('dbg-') && aiStore.debug))"
         :key="msg.id"
@@ -52,6 +52,18 @@
         @reject="onReject"
       />
       <div v-if="aiStore.isRunning" class="ai-thinking">{{ t('ai.thinking') }}</div>
+    </div>
+
+    <!-- AI messages context menu -->
+    <div
+      v-show="aiMenuVisible"
+      ref="aiMenuRef"
+      class="ai-context-menu"
+      :style="aiMenuStyle"
+      @click.stop
+    >
+      <div class="ai-menu-item" @click="aiCopySelection">{{ t('terminal.copy') }}</div>
+      <div class="ai-menu-item" @click="aiAskSelection">{{ t('terminal.askAI') }}</div>
     </div>
 
     <div class="ai-input">
@@ -128,9 +140,12 @@ const tabStore = useTabStore()
 const { t } = useI18n()
 const input = ref('')
 const messagesRef = ref<HTMLDivElement>()
+const aiMenuRef = ref<HTMLDivElement>()
 const sidebarWidth = ref(360)
 const isResizing = ref(false)
 const sidebarEl = ref<HTMLDivElement>()
+const aiMenuVisible = ref(false)
+const aiMenuStyle = ref({ left: '0px', top: '0px' })
 
 const currentSessionName = computed(() => {
   const s = aiStore.sessions.find(s => s.id === aiStore.currentSessionId)
@@ -196,6 +211,46 @@ function scrollToBottom() {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight
     }
   })
+}
+
+function closeAIMenu() {
+  aiMenuVisible.value = false
+}
+
+function onAIContextMenu(e: MouseEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  // Close other context menus via global event
+  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
+  aiMenuStyle.value = fitMenuPosition(e.clientX, e.clientY, 120, 76)
+  aiMenuVisible.value = true
+}
+
+function fitMenuPosition(x: number, y: number, menuW: number, menuH: number) {
+  let left = x
+  let top = y
+  if (x + menuW > window.innerWidth) left = x - menuW
+  if (y + menuH > window.innerHeight) top = y - menuH
+  return { left: left + 'px', top: top + 'px' }
+}
+
+function aiCopySelection() {
+  const selection = window.getSelection()
+  if (selection && selection.toString()) {
+    navigator.clipboard.writeText(selection.toString())
+  }
+  closeAIMenu()
+}
+
+function aiAskSelection() {
+  const selection = window.getSelection()
+  if (selection && selection.toString()) {
+    input.value = selection.toString()
+    if (!aiStore.visible) {
+      aiStore.visible = true
+    }
+  }
+  closeAIMenu()
 }
 
 function onSessionCommand(command: string) {
@@ -296,10 +351,14 @@ function onAskAI(e: Event) {
 
 onMounted(() => {
   window.addEventListener('ai:ask', onAskAI)
+  window.addEventListener('global:close-context-menus', closeAIMenu)
+  document.addEventListener('click', closeAIMenu)
 })
 
 onUnmounted(() => {
   window.removeEventListener('ai:ask', onAskAI)
+  window.removeEventListener('global:close-context-menus', closeAIMenu)
+  document.removeEventListener('click', closeAIMenu)
 })
 </script>
 
@@ -410,6 +469,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   font-family: var(--font-ui);
+  font-size: 12px;
 }
 :deep(.el-dropdown-menu__item:hover .session-delete) {
   opacity: 1;
@@ -445,6 +505,8 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .ai-thinking {
   padding: 8px 14px;
@@ -500,5 +562,33 @@ onUnmounted(() => {
 }
 .mode-warning {
   color: var(--warning);
+}
+
+.ai-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  min-width: 120px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.ai-menu-item {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-sm);
+  transition: all 0.1s ease;
+}
+
+.ai-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 </style>

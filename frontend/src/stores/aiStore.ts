@@ -138,7 +138,13 @@ export const useAIStore = defineStore('ai', () => {
     const MAX_MSG_PER_SESSION = 200
     const MAX_MSG_CONTENT_LEN = 10000
 
-    const trimmed = sessions.value.map(s => {
+    // Only persist sessions that have actual conversation content
+    const nonEmpty = sessions.value.filter(s => s.messages.length > 0)
+
+    // Keep at most 15 sessions
+    const kept = nonEmpty.slice(0, 15)
+
+    const trimmed = kept.map(s => {
       let msgs = s.messages.slice(-MAX_MSG_PER_SESSION)
       msgs = msgs.map(m => {
         if (m.content && m.content.length > MAX_MSG_CONTENT_LEN) {
@@ -153,7 +159,7 @@ export const useAIStore = defineStore('ai', () => {
       const compressed = compressToUTF16(JSON.stringify(trimmed))
       localStorage.setItem(SESSIONS_KEY, compressed)
     } catch (e) {
-      const aggressive = sessions.value.map(s => {
+      const aggressive = kept.map(s => {
         const msgs = s.messages.slice(-50).map(m => ({
           ...m,
           content: m.content?.slice(0, 2000) || ''
@@ -285,13 +291,8 @@ export const useAIStore = defineStore('ai', () => {
 
   const systemPrompt = computed(() => SYSTEM_PROMPT)
 
-  // Init: load current session messages or create new session
-  const existingSession = sessions.value.find(s => s.id === currentSessionId.value)
-  if (existingSession) {
-    messages.value = existingSession.messages.map(m => reactive({ ...m }) as AIMessage)
-  } else {
-    createSession()
-  }
+  // Init: always start fresh to avoid loading stale conversation state
+  createSession()
 
   return {
     visible,

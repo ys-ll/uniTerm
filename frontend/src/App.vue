@@ -14,11 +14,24 @@
       <AISidebar />
     </div>
     <ConnectionForm v-model="showConnectionForm" @save="onSaveOnly" @connect="onConnect" />
+
+    <!-- Input context menu -->
+    <div
+      v-show="inputMenuVisible"
+      class="input-context-menu"
+      :style="{ left: inputMenuPos.x + 'px', top: inputMenuPos.y + 'px' }"
+      @click.stop
+    >
+      <div class="input-menu-item" @click="inputMenuCut">{{ t('input.cut') }}</div>
+      <div class="input-menu-item" @click="inputMenuCopy">{{ t('input.copy') }}</div>
+      <div class="input-menu-item" @click="inputMenuPaste">{{ t('input.paste') }}</div>
+      <div class="input-menu-item" @click="inputMenuSelectAll">{{ t('input.selectAll') }}</div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import Sidebar from './components/Sidebar.vue'
 import SplitContainer from './components/SplitContainer.vue'
@@ -42,10 +55,92 @@ const { t } = useI18n()
 const showConnectionForm = ref(false)
 const sidebarVisible = ref(true)
 
+// Input context menu state
+const inputMenuVisible = ref(false)
+const inputMenuPos = ref({ x: 0, y: 0 })
+let inputMenuTarget: HTMLInputElement | HTMLTextAreaElement | null = null
+
+function closeInputMenu() {
+  inputMenuVisible.value = false
+  inputMenuTarget = null
+}
+
+function onInputContextMenu(e: Event) {
+  const { x, y, target } = (e as CustomEvent).detail as {
+    x: number; y: number; target: HTMLInputElement | HTMLTextAreaElement
+  }
+  window.dispatchEvent(new CustomEvent('global:close-context-menus'))
+  inputMenuTarget = target
+  const pos = fitMenuPosition(x, y, 120, 140)
+  inputMenuPos.value = { x: parseInt(pos.left), y: parseInt(pos.top) }
+  inputMenuVisible.value = true
+}
+
+function fitMenuPosition(x: number, y: number, menuW: number, menuH: number) {
+  let left = x
+  let top = y
+  if (x + menuW > window.innerWidth) left = x - menuW
+  if (y + menuH > window.innerHeight) top = y - menuH
+  return { left: left + 'px', top: top + 'px' }
+}
+
+function inputMenuCut() {
+  if (inputMenuTarget) {
+    navigator.clipboard.writeText(getInputSelection(inputMenuTarget))
+    setInputSelection(inputMenuTarget, '')
+    inputMenuTarget.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  closeInputMenu()
+}
+
+function inputMenuCopy() {
+  if (inputMenuTarget) {
+    navigator.clipboard.writeText(getInputSelection(inputMenuTarget))
+  }
+  closeInputMenu()
+}
+
+function inputMenuPaste() {
+  if (inputMenuTarget) {
+    navigator.clipboard.readText().then(text => {
+      setInputSelection(inputMenuTarget, text)
+      inputMenuTarget?.dispatchEvent(new Event('input', { bubbles: true }))
+    }).catch(() => {})
+  }
+  closeInputMenu()
+}
+
+function inputMenuSelectAll() {
+  inputMenuTarget?.select()
+  closeInputMenu()
+}
+
+function getInputSelection(el: HTMLInputElement | HTMLTextAreaElement): string {
+  return el.value.substring(el.selectionStart ?? 0, el.selectionEnd ?? 0)
+}
+
+function setInputSelection(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
+  const start = el.selectionStart ?? 0
+  const end = el.selectionEnd ?? 0
+  el.value = el.value.substring(0, start) + text + el.value.substring(end)
+  const pos = start + text.length
+  el.setSelectionRange(pos, pos)
+  el.focus()
+}
+
 onMounted(() => {
   connectionStore.load()
   aiStore.initConfig()
   settingsStore.init()
+  window.addEventListener('input:contextmenu', onInputContextMenu)
+  window.addEventListener('global:close-context-menus', closeInputMenu)
+  document.addEventListener('click', closeInputMenu)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('input:contextmenu', onInputContextMenu)
+  window.removeEventListener('global:close-context-menus', closeInputMenu)
+  document.removeEventListener('click', closeInputMenu)
 })
 
 // Update settings tab title when language changes
@@ -133,5 +228,33 @@ async function onConnect(config: ConnectionConfig) {
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-base);
+}
+
+.input-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  min-width: 120px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+}
+
+.input-menu-item {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-sm);
+  transition: all 0.1s ease;
+}
+
+.input-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 </style>

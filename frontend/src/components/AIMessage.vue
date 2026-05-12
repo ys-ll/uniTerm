@@ -98,6 +98,19 @@ function renderMarkdown(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
 
+  // Protect fenced code blocks and inline code from further markdown processing
+  const protectedBlocks: string[] = []
+  html = html.replace(/```([\s\S]*?)```/g, (_, code) => {
+    const idx = protectedBlocks.length
+    protectedBlocks.push(`<pre><code>${code.trim()}</code></pre>`)
+    return `\x00CODEBLOCK${idx}\x00`
+  })
+  html = html.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = protectedBlocks.length
+    protectedBlocks.push(`<code>${code}</code>`)
+    return `\x00CODEBLOCK${idx}\x00`
+  })
+
   // Headings
   html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>')
   html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>')
@@ -106,8 +119,6 @@ function renderMarkdown(text: string): string {
   html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>')
   html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>')
 
-  // Code blocks
-  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
   html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
@@ -134,7 +145,6 @@ function renderMarkdown(text: string): string {
     for (const block of tableBlocks) {
       const lines = block.trim().split('\n').filter(line => line.trim())
       if (lines.length < 2) continue
-      // Skip separator line (contains only |, -, :, spaces)
       const dataLines = lines.filter((line, idx) => idx !== 1 || !/^\s*[|:\-|\s]+\|\s*$/.test(line))
       let tableHtml = '<table>'
       dataLines.forEach((line, rowIdx) => {
@@ -148,10 +158,11 @@ function renderMarkdown(text: string): string {
   }
 
   html = html.replace(/^---+$/gm, '<hr>')
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+
+  // Restore protected code blocks
+  html = html.replace(/\x00CODEBLOCK(\d+)\x00/g, (_, idx) => protectedBlocks[parseInt(idx)])
 
   // Convert remaining newlines to <br>, but remove <br> after block-level elements
-  // to avoid double spacing (block elements already have margins)
   html = html.replace(/\n/g, '<br>')
   html = html.replace(/(<\/(h[1-6]|pre|table|ul|ol|hr|li|div|p)>|<hr\/?>)\s*<br>/gi, '$1')
   html = html.replace(/<br>\s*(<(h[1-6]|pre|table|ul|ol|hr|div|p)>)/gi, '$1')
@@ -227,6 +238,8 @@ function escapeHtml(text: string): string {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-ui);
+  user-select: text;
+  -webkit-user-select: text;
 }
 .text :deep(pre) {
   background: var(--bg-base);

@@ -177,6 +177,8 @@ body {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Noise texture overlay for atmosphere */
@@ -290,6 +292,7 @@ body::before {
 .el-select-dropdown__item {
   color: var(--text-secondary) !important;
   font-family: var(--font-ui);
+  font-size: 12px;
 }
 .el-select-dropdown__item.hover,
 .el-select-dropdown__item:hover {
@@ -342,6 +345,17 @@ body::before {
 .el-dropdown-menu__item:hover {
   background: var(--bg-hover) !important;
   color: var(--text-primary) !important;
+}
+
+/* Remove white border/outline from dropdown popper wrappers */
+.el-popper {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.el-popper__arrow {
+  display: none !important;
 }
 
 /* Tab transitions */

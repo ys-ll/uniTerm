@@ -19,4 +19,15 @@ document.addEventListener('contextmenu', () => {
   window.dispatchEvent(new CustomEvent('global:close-context-menus'))
 }, true)
 
-document.addEventListener('contextmenu', (e) => e.preventDefault())
+document.addEventListener('contextmenu', (e) => {
+  const target = e.target as HTMLElement
+  const tag = target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) {
+    e.preventDefault()
+    window.dispatchEvent(new CustomEvent('input:contextmenu', {
+      detail: { x: e.clientX, y: e.clientY, target }
+    }))
+    return
+  }
+  e.preventDefault()
+})

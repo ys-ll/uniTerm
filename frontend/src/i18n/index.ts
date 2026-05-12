@@ -53,9 +53,16 @@ const messages: Record<Locale, Record<string, string>> = {
     'tab.close': '关闭',
 
     // TerminalTab
-    'terminal.copy': '复制',
-    'terminal.paste': '粘贴',
     'terminal.askAI': '问AI',
+    'terminal.copy': '复制',
+    'terminal.copyAndPaste': '复制并粘贴',
+    'terminal.paste': '粘贴',
+
+    // Input context menu
+    'input.cut': '剪切',
+    'input.copy': '复制',
+    'input.paste': '粘贴',
+    'input.selectAll': '全选',
 
     // AISidebar
     'ai.title': 'AI 助手',
@@ -183,9 +190,16 @@ const messages: Record<Locale, Record<string, string>> = {
     'tab.close': 'Close',
 
     // TerminalTab
-    'terminal.copy': 'Copy',
-    'terminal.paste': 'Paste',
     'terminal.askAI': 'Ask AI',
+    'terminal.copy': 'Copy',
+    'terminal.copyAndPaste': 'Copy & Paste',
+    'terminal.paste': 'Paste',
+
+    // Input context menu
+    'input.cut': 'Cut',
+    'input.copy': 'Copy',
+    'input.paste': 'Paste',
+    'input.selectAll': 'Select All',
 
     // AISidebar
     'ai.title': 'AI Assistant',
