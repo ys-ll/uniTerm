@@ -6,8 +6,8 @@ import { WindowSetTitle } from '../wailsjs/runtime'
 import App from './App.vue'
 import './style.css'
 
-const buildTime = import.meta.env.VITE_BUILD_TIME || ''
-WindowSetTitle(`uniTerm (buildTime: ${buildTime})`)
+const version = import.meta.env.VITE_VERSION || 'dev'
+WindowSetTitle(`uniTerm ${version}`)
 
 const app = createApp(App)
 app.use(createPinia())

@@ -56,10 +56,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
 
+      - name: Set version
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+          else
+            SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "VERSION=dev-${SHORT}" >> $GITHUB_ENV
+          fi
+
       - name: Prepare app icon
         run: mkdir -p build && cp appicon.png build/appicon.png
 
       - name: Build
+        env:
+          VITE_VERSION: ${{ env.VERSION }}
         run: wails build -platform ${{ matrix.platform }} -ldflags "-s -w" -skipbindings
 
       - name: Upload artifact
@@ -79,18 +91,32 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package macOS app
+      - name: Package artifacts
+        env:
+          VER: ${{ github.ref_name }}
         run: |
-          ls -laR artifacts/uniTerm-darwin-universal/
-          cd artifacts/uniTerm-darwin-universal
-          zip -r ../../uniTerm-darwin-universal.zip .
+          cd artifacts
+
+          # macOS: wrap in .app bundle
+          mv uniTerm-darwin-universal uniTerm.app
+          zip -r ../uniterm-darwin-universal-${VER}.zip uniTerm.app
+
+          # Windows: zip the exe
+          cd uniTerm-windows-amd64
+          zip ../uniterm-windows-amd64-${VER}.zip uniTerm.exe
+          cd ..
+
+          # Linux: tar.gz the binary
+          cd uniTerm-linux-amd64
+          chmod +x uniTerm
+          tar czf ../uniterm-linux-amd64-${VER}.tar.gz uniTerm
+          cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/uniTerm-windows-amd64/uniTerm.exe
-            artifacts/uniTerm-linux-amd64/uniTerm
-            uniTerm-darwin-universal.zip
+            uniterm-*.zip
+            uniterm-*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
