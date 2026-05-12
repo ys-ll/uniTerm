@@ -1,5 +1,11 @@
-# Build output
-build/
+# Build output (only NSIS installer template is tracked)
+build/*
+!build/windows/
+build/windows/*
+!build/windows/installer/
+build/windows/installer/*
+!build/windows/installer/project.nsi
+!build/appicon.png
 uniTerm.exe
 __debug*
 

@@ -8,13 +8,14 @@ ManifestDPIAware true
 !endif
 
 Name "${PRODUCT_NAME}"
-OutFile "uniTerm-amd64-installer.exe"
+OutFile "..\..\bin\uniTerm-amd64-installer.exe"
 InstallDir "$PROGRAMFILES64\${PRODUCT_NAME}"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
 !define MUI_ABORTWARNING
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${BINARY}"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -27,7 +28,7 @@ SetCompressor /SOLID lzma
 
 Section "Install"
   SetOutPath "$INSTDIR"
-  File "../../build/bin/${BINARY}"
+  File "/oname=${BINARY}" "${ARG_WAILS_AMD64_BINARY}"
   CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${BINARY}"
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${BINARY}"
