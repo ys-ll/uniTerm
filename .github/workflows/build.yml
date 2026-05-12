@@ -80,11 +80,33 @@ jobs:
           chmod +x build/bin/uniTerm.app/Contents/MacOS/uniTerm
           codesign --force --deep --sign - build/bin/uniTerm.app
 
+      - name: Package (macOS)
+        if: matrix.platform == 'darwin/universal'
+        run: |
+          cd build/bin
+          ditto -c -k --keepParent uniTerm.app ../../uniterm-darwin-universal-${VERSION}.zip
+
+      - name: Package (Windows)
+        if: matrix.platform == 'windows/amd64'
+        shell: bash
+        run: |
+          cd build/bin
+          zip ../../uniterm-windows-amd64-${VERSION}.zip uniTerm.exe
+
+      - name: Package (Linux)
+        if: matrix.platform == 'linux/amd64'
+        run: |
+          cd build/bin
+          chmod +x uniTerm
+          tar czf ../../uniterm-linux-amd64-${VERSION}.tar.gz uniTerm
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: uniTerm-${{ matrix.slug }}
-          path: build/bin/${{ matrix.artifact }}
+          path: |
+            uniterm-*.zip
+            uniterm-*.tar.gz
 
   release:
     needs: build
@@ -97,26 +119,10 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package artifacts
-        env:
-          VER: ${{ github.ref_name }}
+      - name: Collect release files
         run: |
-          # macOS: wrap in .app bundle
-          cd artifacts
-          mv uniTerm-darwin-universal uniTerm.app
-          zip -r ../uniterm-darwin-universal-${VER}.zip uniTerm.app
-          cd ..
-
-          # Windows: zip the exe
-          cd artifacts/uniTerm-windows-amd64
-          zip ../../uniterm-windows-amd64-${VER}.zip uniTerm.exe
-          cd ../..
-
-          # Linux: tar.gz the binary
-          cd artifacts/uniTerm-linux-amd64
-          chmod +x uniTerm
-          tar czf ../../uniterm-linux-amd64-${VER}.tar.gz uniTerm
-          cd ../..
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec mv {} . \;
+          ls -la uniterm-*
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
