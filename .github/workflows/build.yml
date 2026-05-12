@@ -68,11 +68,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
 
+      - name: Download NSIS (Windows)
+        if: matrix.platform == 'windows/amd64'
+        shell: bash
+        run: |
+          curl -fsSL -o nsis.zip "https://sourceforge.net/projects/nsis/files/NSIS%203/3.10/nsis-3.10.zip/download"
+          unzip -qo nsis.zip -d nsis
+          echo "$(pwd)/nsis/nsis-3.10" >> $GITHUB_PATH
+
       - name: Prepare app icon
         run: mkdir -p build && cp appicon.png build/appicon.png
 
       - name: Build
-        run: wails build -platform ${{ matrix.platform }} -ldflags "-s -w" -skipbindings
+        run: wails build -platform ${{ matrix.platform }} -ldflags "-s -w" -skipbindings ${{ matrix.platform == 'windows/amd64' && '-nsis' || '' }}
 
       - name: Fix macOS permissions and sign
         if: matrix.platform == 'darwin/universal'
@@ -87,24 +95,10 @@ jobs:
           ditto -c -k --keepParent uniTerm.app ../../uniterm-darwin-universal-${VERSION}.zip
           hdiutil create -volname uniTerm -srcfolder uniTerm.app -ov -format UDZO ../../uniterm-darwin-universal-${VERSION}.dmg
 
-      - name: Build NSIS installer (Windows)
+      - name: Rename NSIS installer (Windows)
         if: matrix.platform == 'windows/amd64'
         shell: bash
-        run: |
-          echo "Downloading NSIS 3.10..."
-          curl -fsSL -o nsis.zip "https://github.com/kichik/nsis/releases/download/v3.10/nsis-3.10.zip"
-          echo "Extracting..."
-          unzip -qo nsis.zip -d nsis
-          MAKENSIS=$(find nsis -name makensis.exe -type f | head -1)
-          echo "makensis: $MAKENSIS"
-          if [ -z "$MAKENSIS" ]; then
-            echo "ERROR: makensis.exe not found in archive"
-            echo "Archive contents:"
-            ls -R nsis | head -40
-            exit 1
-          fi
-          "$MAKENSIS" -DVERSION="$VERSION" installer/windows/project.nsi
-          mv uniTerm-amd64-installer.exe "uniterm-windows-amd64-installer-$VERSION.exe"
+        run: mv build/bin/uniTerm-amd64-installer.exe "uniterm-windows-amd64-installer-$VERSION.exe"
 
       - name: Package (Windows)
         if: matrix.platform == 'windows/amd64'
