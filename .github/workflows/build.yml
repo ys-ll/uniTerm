@@ -88,10 +88,9 @@ jobs:
 
       - name: Package (Windows)
         if: matrix.platform == 'windows/amd64'
-        shell: bash
         run: |
-          cd build/bin
-          zip ../../uniterm-windows-amd64-${VERSION}.zip uniTerm.exe
+          cd build\bin
+          Compress-Archive -Path uniTerm.exe -DestinationPath ..\..\uniterm-windows-amd64-${env:VERSION}.zip
 
       - name: Package (Linux)
         if: matrix.platform == 'linux/amd64'
