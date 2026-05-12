@@ -90,27 +90,13 @@ jobs:
       - name: Build NSIS installer (Windows)
         if: matrix.platform == 'windows/amd64'
         run: |
-          if (-not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
-            Write-Host "NSIS not found, installing via chocolatey..."
-            choco install nsis -y --no-progress
-          }
-          $makensis = $null
-          @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "${env:ProgramFiles}\NSIS\makensis.exe") | ForEach-Object {
-            if ((-not $makensis) -and (Test-Path $_)) { $makensis = $_ }
-          }
-          if (-not $makensis) {
-            Write-Host "Not in Program Files, checking Chocolatey lib..."
-            $makensis = (Get-ChildItem -Path "$env:ChocolateyInstall\lib" -Recurse -Filter "makensis.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          }
-          if (-not $makensis) {
-            Write-Host "Downloading NSIS directly..."
-            $nsisZip = "$env:TEMP\nsis.zip"
-            $nsisDir = "$env:TEMP\nsis-extract"
-            Invoke-WebRequest -Uri "https://github.com/kichik/nsis/releases/download/v3.10/nsis-3.10.zip" -OutFile $nsisZip
-            Expand-Archive -Path $nsisZip -DestinationPath $nsisDir
-            $makensis = (Get-ChildItem -Path $nsisDir -Recurse -Filter "makensis.exe" | Select-Object -First 1).FullName
-          }
-          if (-not $makensis) { throw "makensis.exe not found after all attempts" }
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Write-Host "Downloading NSIS 3.10..."
+          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/kichik/nsis/releases/download/v3.10/nsis-3.10.zip" -OutFile "$env:TEMP\nsis.zip" -ErrorAction Stop
+          Write-Host "Extracting..."
+          Expand-Archive -Path "$env:TEMP\nsis.zip" -DestinationPath "$env:TEMP\nsis" -Force
+          $makensis = (Get-ChildItem -Path "$env:TEMP\nsis" -Recurse -Filter "makensis.exe" | Select-Object -First 1).FullName
+          if (-not $makensis) { throw "makensis.exe not found in extracted archive" }
           Write-Host "Using makensis: $makensis"
           & $makensis -DVERSION=$env:VERSION installer/windows/project.nsi
           mv uniTerm-amd64-installer.exe ./uniterm-windows-amd64-installer-$env:VERSION.exe

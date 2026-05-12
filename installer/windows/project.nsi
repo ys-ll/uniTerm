@@ -8,7 +8,7 @@ ManifestDPIAware true
 !endif
 
 Name "${PRODUCT_NAME}"
-OutFile "../../../uniTerm-amd64-installer.exe"
+OutFile "uniTerm-amd64-installer.exe"
 InstallDir "$PROGRAMFILES64\${PRODUCT_NAME}"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
