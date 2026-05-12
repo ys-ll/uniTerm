@@ -97,32 +97,10 @@ jobs:
         run: |
           cd build/bin
           ditto -c -k --keepParent uniTerm.app ../../uniterm-darwin-universal-${VERSION}.zip
-          mkdir -p dmg_staging/.background
-          cp uniTerm.app/Contents/Resources/icon.icns dmg_staging/.background/bg.png 2>/dev/null || true
+          mkdir -p dmg_staging
           cp -R uniTerm.app dmg_staging/
           ln -s /Applications dmg_staging/Applications
-          hdiutil create -volname uniTerm -size 200m -format UDRW -fs HFS+ -srcfolder dmg_staging tmp.dmg
-          hdiutil attach tmp.dmg -mountpoint /Volumes/uniterm_dmg -nobrowse
-          osascript -e '
-          tell application "Finder"
-            tell disk "uniTerm"
-              open
-              set current view of container window to icon view
-              set toolbar visible of container window to false
-              set statusbar visible of container window to false
-              set the bounds of container window to {400, 100, 900, 420}
-              set viewOptions to the icon view options of container window
-              set arrangement of viewOptions to not arranged
-              set icon size of viewOptions to 80
-              set position of item "uniTerm.app" to {125, 140}
-              set position of item "Applications" to {375, 140}
-              update without registering applications
-              close
-            end tell
-          end tell'
-          hdiutil detach /Volumes/uniterm_dmg
-          hdiutil convert tmp.dmg -format UDZO -o ../../uniterm-darwin-universal-${VERSION}.dmg
-          rm -f tmp.dmg
+          hdiutil create -volname uniTerm -srcfolder dmg_staging -ov -format UDZO ../../uniterm-darwin-universal-${VERSION}.dmg
           rm -rf dmg_staging
 
       - name: Rename NSIS installer (Windows)
