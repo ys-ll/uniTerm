@@ -95,22 +95,22 @@ jobs:
         env:
           VER: ${{ github.ref_name }}
         run: |
-          cd artifacts
-
           # macOS: wrap in .app bundle
+          cd artifacts
           mv uniTerm-darwin-universal uniTerm.app
           zip -r ../uniterm-darwin-universal-${VER}.zip uniTerm.app
+          cd ..
 
           # Windows: zip the exe
-          cd uniTerm-windows-amd64
-          zip ../uniterm-windows-amd64-${VER}.zip uniTerm.exe
-          cd ..
+          cd artifacts/uniTerm-windows-amd64
+          zip ../../uniterm-windows-amd64-${VER}.zip uniTerm.exe
+          cd ../..
 
           # Linux: tar.gz the binary
-          cd uniTerm-linux-amd64
+          cd artifacts/uniTerm-linux-amd64
           chmod +x uniTerm
-          tar czf ../uniterm-linux-amd64-${VER}.tar.gz uniTerm
-          cd ..
+          tar czf ../../uniterm-linux-amd64-${VER}.tar.gz uniTerm
+          cd ../..
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
