@@ -89,17 +89,22 @@ jobs:
 
       - name: Build NSIS installer (Windows)
         if: matrix.platform == 'windows/amd64'
+        shell: bash
         run: |
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-          Write-Host "Downloading NSIS 3.10..."
-          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/kichik/nsis/releases/download/v3.10/nsis-3.10.zip" -OutFile "$env:TEMP\nsis.zip" -ErrorAction Stop
-          Write-Host "Extracting..."
-          Expand-Archive -Path "$env:TEMP\nsis.zip" -DestinationPath "$env:TEMP\nsis" -Force
-          $makensis = (Get-ChildItem -Path "$env:TEMP\nsis" -Recurse -Filter "makensis.exe" | Select-Object -First 1).FullName
-          if (-not $makensis) { throw "makensis.exe not found in extracted archive" }
-          Write-Host "Using makensis: $makensis"
-          & $makensis -DVERSION=$env:VERSION installer/windows/project.nsi
-          mv uniTerm-amd64-installer.exe ./uniterm-windows-amd64-installer-$env:VERSION.exe
+          echo "Downloading NSIS 3.10..."
+          curl -fsSL -o nsis.zip "https://github.com/kichik/nsis/releases/download/v3.10/nsis-3.10.zip"
+          echo "Extracting..."
+          unzip -qo nsis.zip -d nsis
+          MAKENSIS=$(find nsis -name makensis.exe -type f | head -1)
+          echo "makensis: $MAKENSIS"
+          if [ -z "$MAKENSIS" ]; then
+            echo "ERROR: makensis.exe not found in archive"
+            echo "Archive contents:"
+            ls -R nsis | head -40
+            exit 1
+          fi
+          "$MAKENSIS" -DVERSION="$VERSION" installer/windows/project.nsi
+          mv uniTerm-amd64-installer.exe "uniterm-windows-amd64-installer-$VERSION.exe"
 
       - name: Package (Windows)
         if: matrix.platform == 'windows/amd64'
