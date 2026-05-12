@@ -78,8 +78,9 @@ jobs:
 
       - name: Package macOS app
         run: |
+          ls -laR artifacts/uniTerm-darwin-universal/
           cd artifacts/uniTerm-darwin-universal
-          zip -r ../../uniTerm-darwin-universal.zip uniTerm.app
+          zip -r ../../uniTerm-darwin-universal.zip .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
