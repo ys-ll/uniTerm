@@ -76,7 +76,7 @@ jobs:
           MAKENSIS=$(find /c/Program\ Files* /c/ProgramData -name makensis.exe -type f 2>/dev/null | head -1)
           if [ -z "$MAKENSIS" ]; then echo "ERROR: makensis.exe not found"; exit 1; fi
           echo "makensis: $MAKENSIS"
-          echo "$(cygpath -w "$(dirname "$MAKENSIS")")" >> $GITHUB_PATH
+          echo "$(dirname "$MAKENSIS")" >> $GITHUB_PATH
 
       - name: Prepare app icon
         run: mkdir -p build && cp appicon.png build/appicon.png
