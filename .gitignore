@@ -7,7 +7,7 @@ __debug*
 node_modules/
 
 # Logs
-backend/log/
+*.log
 
 # IDE
 .vscode/
