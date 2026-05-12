@@ -90,11 +90,17 @@ jobs:
       - name: Build NSIS installer (Windows)
         if: matrix.platform == 'windows/amd64'
         run: |
-          $nsisZip = "$env:TEMP\nsis.zip"
-          $nsisDir = "$env:TEMP\nsis"
-          Invoke-WebRequest -Uri "https://github.com/kichik/nsis/releases/download/v3.10/nsis-3.10.zip" -OutFile $nsisZip
-          Expand-Archive -Path $nsisZip -DestinationPath $nsisDir
-          & "$nsisDir\makensis.exe" -DVERSION=$env:VERSION installer/windows/project.nsi
+          choco install nsis -y --no-progress
+          $makensis = $null
+          @("${env:ProgramFiles(x86)}\NSIS\makensis.exe", "${env:ProgramFiles}\NSIS\makensis.exe") | ForEach-Object {
+            if ((-not $makensis) -and (Test-Path $_)) { $makensis = $_ }
+          }
+          if (-not $makensis) {
+            $makensis = (Get-ChildItem -Path "$env:ChocolateyInstall\lib" -Recurse -Filter "makensis.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          }
+          if (-not $makensis) { throw "makensis.exe not found" }
+          Write-Host "makensis: $makensis"
+          & $makensis -DVERSION=$env:VERSION installer/windows/project.nsi
           mv uniTerm-amd64-installer.exe ./uniterm-windows-amd64-installer-$env:VERSION.exe
 
       - name: Package (Windows)
