@@ -89,6 +89,7 @@ jobs:
         run: |
           cd build/bin
           ditto -c -k --keepParent uniTerm.app ../../uniterm-darwin-universal-${VERSION}.zip
+          hdiutil create -volname uniTerm -srcfolder uniTerm.app -ov -format UDZO ../../uniterm-darwin-universal-${VERSION}.dmg
 
       - name: Build NSIS installer (Windows)
         if: matrix.platform == 'windows/amd64'
@@ -117,6 +118,7 @@ jobs:
             uniterm-*.zip
             uniterm-*.tar.gz
             uniterm-*.exe
+            uniterm-*.dmg
 
   release:
     needs: build
@@ -131,7 +133,7 @@ jobs:
 
       - name: Collect release files
         run: |
-          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' \) -exec mv {} . \;
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' -o -name '*.dmg' \) -exec mv {} . \;
           ls -la uniterm-*
 
       - name: Create Release
@@ -141,5 +143,6 @@ jobs:
             uniterm-*.zip
             uniterm-*.tar.gz
             uniterm-*.exe
+            uniterm-*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
