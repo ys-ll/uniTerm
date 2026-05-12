@@ -91,8 +91,7 @@ jobs:
         if: matrix.platform == 'windows/amd64'
         run: |
           choco install nsis -y
-          $env:Path += ";${env:ProgramFiles(x86)}\NSIS"
-          makensis -DVERSION=$env:VERSION installer/windows/project.nsi
+          & "C:\Program Files (x86)\NSIS\makensis.exe" -DVERSION=$env:VERSION installer/windows/project.nsi
           mv uniTerm-amd64-installer.exe ./uniterm-windows-amd64-installer-$env:VERSION.exe
 
       - name: Package (Windows)
