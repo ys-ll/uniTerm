@@ -55,7 +55,6 @@ export const useAIStore = defineStore('ai', () => {
   const mode = ref<ExecutionMode>('confirm_dangerous')
   const config = ref<AIConfig>({ ...DEFAULT_CONFIG })
   const isRunning = ref(false)
-  const debug = ref(false)
   const stopRequested = ref(false)
   const sessions = ref<AISession[]>(loadSessions())
   const currentSessionId = ref<string | null>(loadCurrentSessionId())
@@ -67,13 +66,6 @@ export const useAIStore = defineStore('ai', () => {
   function addMessage(msg: AIMessage): AIMessage {
     const r = reactive({ ...msg }) as AIMessage
     messages.value.push(r)
-    if (msg.id?.startsWith('dbg-')) {
-      const dbgCount = messages.value.filter(m => m.id?.startsWith('dbg-')).length
-      if (dbgCount > 100) {
-        const firstDbgIdx = messages.value.findIndex(m => m.id?.startsWith('dbg-'))
-        if (firstDbgIdx >= 0) messages.value.splice(firstDbgIdx, 1)
-      }
-    }
     if (currentSessionId.value) {
       const s = sessions.value.find(s => s.id === currentSessionId.value)
       if (s) {
@@ -135,7 +127,7 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   function saveSessions() {
-    const MAX_MSG_PER_SESSION = 200
+    const MAX_MSG_PER_SESSION = 100
     const MAX_MSG_CONTENT_LEN = 10000
 
     // Only persist sessions that have actual conversation content
@@ -239,55 +231,80 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   // Build Anthropic-native message array (system is separate top-level field)
-  const conversation = computed(() =>
-    messages.value
-      .filter(m => !m.id.startsWith('dbg-'))
-      .filter(m => {
-        if (m.role === 'assistant' && !m.content && !m.tool_calls?.length && !m._rawApiMsg && !m.pendingTools?.length) {
-          return false
-        }
-        return true
-      })
-      .map(m => {
-        // Tool results → Anthropic tool_result blocks inside user-role messages
-        if (m.role === 'tool' && m.tool_call_id) {
-          return {
-            role: 'user',
-            content: [{
-              type: 'tool_result',
-              tool_use_id: m.tool_call_id,
-              content: m.content
-            }]
-          }
-        }
+  const conversation = computed(() => {
+    const MAX_CTX_MSGS = 100
 
-        // Assistant with raw API blocks: pass through verbatim
-        if (m._rawApiMsg) {
-          return { ...m._rawApiMsg }
-        }
+    // Take only recent messages to stay within context window
+    const recentMsgs = messages.value.slice(-MAX_CTX_MSGS)
 
-        // Assistant with legacy tool_calls: build Anthropic content blocks
-        if (m.role === 'assistant' && m.tool_calls?.length) {
-          const blocks: Array<Record<string, unknown>> = []
-          if (m.content) {
-            blocks.push({ type: 'text', text: m.content })
-          }
-          for (const tc of m.tool_calls) {
-            let input: Record<string, unknown> = {}
-            try { input = JSON.parse(tc.function.arguments) } catch { /* passthrough */ }
-            blocks.push({
-              type: 'tool_use',
-              id: tc.id,
-              name: tc.function.name,
-              input
-            })
-          }
-          return { role: 'assistant', content: blocks }
-        }
+    // Collect all resolved tool_use IDs from tool_result messages
+    const resolvedIds = new Set<string>()
+    for (const m of recentMsgs) {
+      if (m.role === 'tool' && m.tool_call_id) {
+        resolvedIds.add(m.tool_call_id)
+      }
+    }
 
-        return { role: m.role, content: m.content }
-      })
-  )
+    const result: Array<Record<string, unknown>> = []
+
+    for (const m of recentMsgs) {
+      if (m.id.startsWith('dbg-')) continue
+      if (m.needsContinue) continue  // UI-only prompts, not part of LLM conversation
+
+      // Tool results -> Anthropic tool_result blocks inside user-role messages
+      if (m.role === 'tool' && m.tool_call_id) {
+        result.push({
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content }]
+        })
+        continue
+      }
+
+      // Assistant with raw API blocks: filter dangling tool_use blocks without matching tool_result
+      if (m._rawApiMsg) {
+        const raw = m._rawApiMsg as Record<string, unknown>
+        const content = raw.content
+        if (Array.isArray(content)) {
+          const filtered = (content as Array<Record<string, unknown>>).filter((block: Record<string, unknown>) => {
+            if (block.type === 'tool_use') {
+              return resolvedIds.has(block.id as string)
+            }
+            return true
+          })
+          if (filtered.length === 0 && !m.content) continue
+          result.push({ ...raw, content: filtered })
+        } else {
+          result.push({ ...raw })
+        }
+        continue
+      }
+
+      // Assistant with legacy tool_calls: filter dangling ones, build content blocks
+      if (m.role === 'assistant' && m.tool_calls?.length) {
+        const resolved = m.tool_calls.filter(tc => resolvedIds.has(tc.id))
+        if (!m.content && resolved.length === 0 && !m.pendingTools?.length) continue
+
+        const blocks: Array<Record<string, unknown>> = []
+        if (m.content) {
+          blocks.push({ type: 'text', text: m.content })
+        }
+        for (const tc of resolved) {
+          let input: Record<string, unknown> = {}
+          try { input = JSON.parse(tc.function.arguments) } catch { /* passthrough */ }
+          blocks.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input })
+        }
+        result.push({ role: 'assistant', content: blocks })
+        continue
+      }
+
+      // Skip empty assistant messages (no content, no tool calls, no raw api msg, no pending tools)
+      if (m.role === 'assistant' && !m.content && !m.pendingTools?.length) continue
+
+      result.push({ role: m.role, content: m.content })
+    }
+
+    return result
+  })
 
   const systemPrompt = computed(() => SYSTEM_PROMPT)
 
@@ -308,7 +325,6 @@ export const useAIStore = defineStore('ai', () => {
     setConfig,
     conversation,
     systemPrompt,
-    debug,
     stopRequested,
     stop,
     resetStop,

@@ -21,13 +21,13 @@
     <div class="search-box">
       <el-input
         v-model="searchQuery"
-        size="small"
         :placeholder="t('sidebar.searchPlaceholder')"
         clearable
+        @keydown="onListKeydown"
       />
     </div>
 
-    <div class="connection-list">
+    <div class="connection-list" tabindex="0" @keydown="onListKeydown">
       <div
         v-for="conn in filteredConnections"
         :key="conn.id"
@@ -73,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { Plus, Close } from '@element-plus/icons-vue'
 import { useConnectionStore } from '../stores/connectionStore'
 import { useI18n } from '../i18n'
@@ -103,6 +103,47 @@ const filteredConnections = computed(() => {
     c.host.toLowerCase().includes(q)
   )
 })
+
+watch(filteredConnections, (list) => {
+  if (list.length === 0) {
+    selectedId.value = null
+  } else if (!selectedId.value || !list.some(c => c.id === selectedId.value)) {
+    selectedId.value = list[0].id
+  }
+}, { immediate: true })
+
+function scrollActiveIntoView() {
+  nextTick(() => {
+    const activeEl = sidebarEl.value?.querySelector('.connection-item.active') as HTMLElement
+    activeEl?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+function onListKeydown(e: KeyboardEvent) {
+  if (showForm.value || menuVisible.value) return
+  const list = filteredConnections.value
+  if (list.length === 0) return
+
+  const idx = list.findIndex(c => c.id === selectedId.value)
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    const nextIdx = idx >= 0 && idx < list.length - 1 ? idx + 1 : 0
+    selectedId.value = list[nextIdx].id
+    scrollActiveIntoView()
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    const prevIdx = idx > 0 ? idx - 1 : list.length - 1
+    selectedId.value = list[prevIdx].id
+    scrollActiveIntoView()
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    const conn = list.find(c => c.id === selectedId.value)
+    if (conn) {
+      emit('connect', conn)
+    }
+  }
+}
 
 const menuVisible = ref(false)
 const menuStyle = ref({ left: '0px', top: '0px' })
@@ -229,6 +270,8 @@ function onResizeStart(e: MouseEvent) {
   const startX = e.clientX
   const startWidth = el.offsetWidth
 
+  window.dispatchEvent(new CustomEvent('split:resize-start'))
+
   function onMouseMove(ev: MouseEvent) {
     if (!isResizing.value) return
     const delta = ev.clientX - startX
@@ -241,6 +284,7 @@ function onResizeStart(e: MouseEvent) {
     sidebarWidth.value = el.offsetWidth
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
+    window.dispatchEvent(new CustomEvent('split:resize-end'))
   }
 
   document.addEventListener('mousemove', onMouseMove)
@@ -293,11 +337,10 @@ function onResizeStart(e: MouseEvent) {
 
 .header-label {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
 }
 
 .header-actions {
@@ -334,6 +377,7 @@ function onResizeStart(e: MouseEvent) {
   flex: 1;
   overflow-y: auto;
   padding: 0 8px 8px;
+  outline: none;
 }
 
 .connection-item {

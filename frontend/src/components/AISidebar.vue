@@ -40,18 +40,21 @@
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-      <el-checkbox v-model="aiStore.debug" size="small" class="debug-check">{{ t('ai.debug') }}</el-checkbox>
     </div>
 
     <div ref="messagesRef" class="ai-messages" @contextmenu="onAIContextMenu">
       <AIMessage
-        v-for="msg in aiStore.messages.filter(m => m.role !== 'tool' || (m.id.startsWith('dbg-') && aiStore.debug))"
+        v-for="msg in visibleMessages"
         :key="msg.id"
         :message="msg"
         @approve="onApprove"
         @reject="onReject"
+        @continue="onContinue"
       />
-      <div v-if="aiStore.isRunning" class="ai-thinking">{{ t('ai.thinking') }}</div>
+      <div v-if="aiStore.isRunning" class="ai-thinking">
+        <div class="thinking-avatar">{{ t('ai.avatarAI') }}</div>
+        <div class="thinking-text">{{ t('ai.thinking') }}</div>
+      </div>
     </div>
 
     <!-- AI messages context menu -->
@@ -130,7 +133,7 @@ import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useTabStore } from '../stores/tabStore'
 import { useI18n } from '../i18n'
-import { runAgent, approveTool, rejectTool } from '../services/agent'
+import { runAgent, approveTool, rejectTool, continueAgent } from '../services/agent'
 import type { ExecutionMode, AIConfig } from '../types/ai'
 import AIMessage from './AIMessage.vue'
 
@@ -139,6 +142,15 @@ const settingsStore = useSettingsStore()
 const tabStore = useTabStore()
 const { t } = useI18n()
 const input = ref('')
+
+const visibleMessages = computed(() => {
+  return aiStore.messages.filter(m => {
+    if (m.role === 'tool') return false
+    if (m.role !== 'assistant') return true
+    // 过滤掉内容为空且没有可展示内容的 assistant 消息
+    return m.content || m.tool_calls?.length || m.pendingTools?.length || m.needsContinue
+  })
+})
 const messagesRef = ref<HTMLDivElement>()
 const aiMenuRef = ref<HTMLDivElement>()
 const sidebarWidth = ref(360)
@@ -295,6 +307,11 @@ function onReject(messageId: string) {
   scrollToBottom()
 }
 
+async function onContinue() {
+  await continueAgent()
+  scrollToBottom()
+}
+
 function openGlobalSettings() {
   settingsStore.openCategory = 'ai'
   const existing = tabStore.tabs.find(t => t.type === 'settings')
@@ -320,6 +337,8 @@ function onResizeStart(e: MouseEvent) {
   const startX = e.clientX
   const startWidth = el.offsetWidth
 
+  window.dispatchEvent(new CustomEvent('split:resize-start'))
+
   function onMouseMove(ev: MouseEvent) {
     if (!isResizing.value) return
     const delta = startX - ev.clientX
@@ -333,6 +352,7 @@ function onResizeStart(e: MouseEvent) {
     sidebarWidth.value = el.offsetWidth
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
+    window.dispatchEvent(new CustomEvent('split:resize-end'))
   }
 
   document.addEventListener('mousemove', onMouseMove)
@@ -412,12 +432,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-.debug-check {
-  color: var(--text-muted);
-}
-.debug-check :deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
-  color: var(--text-secondary);
 }
 .session-trigger {
   display: flex;
@@ -509,7 +523,27 @@ onUnmounted(() => {
   -webkit-user-select: text;
 }
 .ai-thinking {
-  padding: 8px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+}
+.thinking-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+  color: #fff;
+  font-size: 9px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+.thinking-text {
   font-size: 11px;
   font-family: var(--font-ui);
   color: var(--text-muted);

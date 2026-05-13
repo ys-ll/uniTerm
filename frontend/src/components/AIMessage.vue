@@ -4,6 +4,12 @@
     <div class="content">
       <div class="text" v-html="renderedContent" />
 
+      <div v-if="message.needsContinue" class="continue-box">
+        <el-button type="primary" size="small" @click="$emit('continue')">
+          {{ t('ai.continue') }}
+        </el-button>
+      </div>
+
       <!-- Tool call pairs: IN + OUT grouped together -->
       <div v-if="message.tool_calls?.length" class="tool-pairs">
         <div v-for="tc in message.tool_calls" :key="tc.id" class="tool-pair">
@@ -58,7 +64,7 @@ import { useI18n } from '../i18n'
 import type { AIMessage } from '../types/ai'
 
 const props = defineProps<{ message: AIMessage }>()
-defineEmits(['approve', 'reject'])
+defineEmits(['approve', 'reject', 'continue'])
 
 const aiStore = useAIStore()
 const { t } = useI18n()
@@ -88,7 +94,7 @@ function formatPendingArgs(args: Record<string, unknown>): string {
 
 function getToolResult(toolCallId: string): AIMessage | undefined {
   return aiStore.messages.find(
-    m => m.role === 'tool' && m.tool_call_id === toolCallId && !m.id.startsWith('dbg-')
+    m => m.role === 'tool' && m.tool_call_id === toolCallId
   )
 }
 
@@ -173,8 +179,8 @@ function renderMarkdown(text: string): string {
 }
 
 const renderedContent = computed(() => {
-  // User and debug messages: plain text, no markdown
-  if (props.message.role === 'user' || props.message.id?.startsWith('dbg-')) {
+  // User messages: plain text, no markdown
+  if (props.message.role === 'user') {
     return escapeHtml(props.message.content)
   }
   return renderMarkdown(props.message.content)
@@ -447,6 +453,10 @@ function escapeHtml(text: string): string {
 .tool-actions {
   display: flex;
   gap: 8px;
+  margin-top: 8px;
+}
+
+.continue-box {
   margin-top: 8px;
 }
 </style>

@@ -26,6 +26,7 @@ export interface Tab {
   type: 'ssh' | 'settings'
   groupId?: string
   config?: ConnectionConfig
+  aiLocked?: boolean
 }
 
 export interface SplitNode {
@@ -33,4 +34,5 @@ export interface SplitNode {
   direction: 'horizontal' | 'vertical' | null
   children: SplitNode[]
   tabGroupId?: string
+  ratio: number
 }

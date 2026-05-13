@@ -36,6 +36,7 @@ export interface AIMessage {
   tool_calls?: ToolCall[]
   tool_call_id?: string
   pendingTools?: PendingTool[]
+  needsContinue?: boolean  // UI-only: max turns reached, prompt user to continue
 }
 
 export interface AISession {

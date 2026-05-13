@@ -367,3 +367,20 @@ body::before {
 .tab-fade-leave-to {
   opacity: 0;
 }
+
+/* Tab drag: activate drop zones only during drag (body class set via direct DOM) */
+body.drag-active .zone {
+  pointer-events: all;
+}
+
+/* Hide terminal content during panel resize to avoid character-by-character reflow */
+.terminal-tab.resizing {
+  visibility: hidden !important;
+}
+
+/* Force xterm root to fill its container so FitAddon/clientWidth measure correctly */
+.xterm {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+}

@@ -3,7 +3,8 @@
     <template v-for="tab in groupTabs" :key="tab.id">
       <div
         class="tab-panel"
-        :class="{ hidden: tab.id !== tabStore.activeTabId }"
+        :class="{ hidden: tab.id !== groupActiveTabId }"
+        @mousedown="tabStore.setActiveTab(tab.id)"
       >
         <TerminalTab v-if="tab.type === 'ssh'" :tab="tab" />
         <SettingsTab v-else-if="tab.type === 'settings'" />
@@ -27,6 +28,10 @@ const tabStore = useTabStore()
 const groupTabs = computed(() =>
   tabStore.tabs.filter(t => t.groupId === props.groupId)
 )
+
+const groupActiveTabId = computed(() =>
+  tabStore.activeTabForGroup(props.groupId) || null
+)
 </script>
 
 <style scoped>
@@ -42,6 +47,8 @@ const groupTabs = computed(() =>
   grid-area: stack;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .tab-panel.hidden {

@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -69,6 +69,8 @@ const hasSelection = ref(false)
 
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 let isResizing = false
+let splitResizing = false
+let suppressResizeUntil = 0
 let retryOnEnter = false
 
 function getTerminalOptions() {
@@ -80,7 +82,7 @@ function getTerminalOptions() {
     theme: getXtermTheme(themeName),
     cursorBlink: true,
     rightClickSelectsWord: false,
-    scrollback: ts.maxHistoryLines || 5000,
+    scrollback: ts.maxHistoryLines || 2500,
     allowProposedApi: true
   }
 }
@@ -290,15 +292,37 @@ async function pasteFromClipboard() {
 
 function notifyResize() {
   if (!terminal || !fitAddon || !props.tab.sessionId) return
-  fitAddon.fit()
-  if (terminal.cols <= 0 || terminal.rows <= 0) return
-  // Force full refresh so xterm re-renders all visible lines at once
-  // instead of incrementally wrapping characters.
-  ;(terminal as any).refresh?.(0, terminal.rows - 1)
-  console.log('[resize]', props.tab.sessionId, 'cols=', terminal.cols, 'rows=', terminal.rows)
-  SessionResize(props.tab.sessionId, terminal.cols, terminal.rows).catch((err) => {
-    console.log('[resize] error:', err)
-  })
+  const el = terminalRef.value
+  if (!el) return
+
+  // Use getBoundingClientRect to get actual rendered size (bypasses
+  // getComputedStyle caching issues during flex shrink).
+  const rect = el.getBoundingClientRect()
+
+  // Read xterm's internally-measured character dimensions.
+  const core = (terminal as any)._core
+  const dims = core?._renderService?.dimensions
+  if (!dims || dims.css.cell.width === 0 || dims.css.cell.height === 0) {
+    // Fallback to FitAddon if char dims aren't ready yet.
+    fitAddon.fit()
+    if (terminal.cols <= 0 || terminal.rows <= 0) return
+    SessionResize(props.tab.sessionId, terminal.cols, terminal.rows).catch(() => {})
+    return
+  }
+
+  // Use the container's actual rendered size (rect) to compute cols/rows.
+  // terminal.element's clientWidth may not shrink when the container shrinks
+  // because xterm's internal screen/canvas width can hold it at the old size.
+  const cols = Math.floor(rect.width / dims.css.cell.width)
+  const rows = Math.floor(rect.height / dims.css.cell.height)
+  const newCols = Math.max(2, cols)
+  const newRows = Math.max(1, rows)
+
+  if (terminal.cols !== newCols || terminal.rows !== newRows) {
+    core._renderService.clear()
+    terminal.resize(newCols, newRows)
+    SessionResize(props.tab.sessionId, newCols, newRows).catch(() => {})
+  }
 }
 
 onMounted(() => {
@@ -310,6 +334,18 @@ onMounted(() => {
   terminal.loadAddon(fitAddon)
   terminal.open(terminalRef.value)
   fitAddon.fit()
+
+  // Restore terminal content from session buffer after tab move/merge
+  if (props.tab.sessionId) {
+    const history = sessionStore.getData(props.tab.sessionId)
+    if (history) {
+      terminal.write(history)
+    }
+  }
+
+  // Retry resize: after a tab move/merge the layout may not be stable yet,
+  // so fitAddon.fit() can compute 0 cols/rows and skip SessionResize.
+  ;[100, 300, 600, 1000, 1500].forEach(d => setTimeout(() => notifyResize(), d))
 
   async function retryConnection() {
     if (!props.tab.config) return
@@ -366,11 +402,33 @@ onMounted(() => {
     }
   })
 
+  function onSplitResizeStart() {
+    splitResizing = true
+  }
+
+  function onSplitResizeEnd() {
+    splitResizing = false
+    if (resizeTimer) {
+      clearTimeout(resizeTimer)
+      resizeTimer = null
+    }
+    suppressResizeUntil = Date.now() + 500
+    nextTick(() => {
+      setTimeout(() => {
+        // Force layout so getComputedStyle returns up-to-date dimensions
+        void terminalRef.value?.offsetWidth
+        notifyResize()
+      }, 0)
+    })
+  }
+
   window.addEventListener('resize', onWindowResize)
+  window.addEventListener('split:resize-start', onSplitResizeStart)
+  window.addEventListener('split:resize-end', onSplitResizeEnd)
 
   // Also handle container-only resize (AI sidebar drag, etc.)
   resizeObserver = new ResizeObserver(() => {
-    if (isResizing) return
+    if (isResizing || splitResizing || Date.now() < suppressResizeUntil) return
     const el = terminalRef.value
     if (!el) return
     if (resizeTimer) clearTimeout(resizeTimer)
@@ -420,6 +478,8 @@ onUnmounted(() => {
   window.removeEventListener('global:close-context-menus', closeMenu)
   document.removeEventListener('click', closeMenu)
   window.removeEventListener('resize', onWindowResize)
+  window.removeEventListener('split:resize-start', onSplitResizeStart)
+  window.removeEventListener('split:resize-end', onSplitResizeEnd)
 })
 </script>
 
@@ -427,17 +487,27 @@ onUnmounted(() => {
 .terminal-tab {
   width: 100%;
   height: 100%;
-  padding: 6px 8px;
-  contain: strict;
+  padding: 0;
+  background: var(--bg-base);
   overflow: hidden;
   user-select: text;
   -webkit-user-select: text;
 }
 
-/* Hide terminal content during window resize */
-.terminal-tab.resizing :deep(.xterm-screen) {
-  opacity: 0 !important;
+/* Ensure xterm fills the container so FitAddon measures correctly */
+.terminal-tab :deep(.xterm) {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
+
+/* Ensure xterm fill matches terminal background */
+.terminal-tab :deep(.xterm),
+.terminal-tab :deep(.xterm-viewport) {
+  background: var(--bg-base);
+}
+
+/* Hide terminal content during window resize — handled globally in style.css */
 
 /* Minimal scrollbar matching app style */
 .terminal-tab :deep(.xterm-viewport) {

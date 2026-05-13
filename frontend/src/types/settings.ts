@@ -40,7 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     fontSize: 14,
     selectionAction: 'none',
     rightClickAction: 'menu',
-    maxHistoryLines: 5000
+    maxHistoryLines: 2500
   },
   ai: {
     models: [

@@ -1,26 +1,17 @@
 import { EventsOn } from '../../wailsjs/runtime'
 import { SessionWrite } from '../../wailsjs/go/main/App'
 import { useTabStore } from '../stores/tabStore'
-import { useAIStore } from '../stores/aiStore'
 
 export interface ExecuteResult {
   output: string
   exitCode: number
 }
 
-function addDebugLog(text: string) {
-  const store = useAIStore()
-  if (!store.debug) return
-  store.addMessage({
-    id: `dbg-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-    role: 'tool',
-    content: `[Debug] ${text}`
-  })
-}
-
 export async function executeCommand(command: string): Promise<ExecuteResult> {
   const tabStore = useTabStore()
-  const sessionId = tabStore.activeTab?.sessionId
+  // Check for AI-locked tab first
+  const lockedTab = tabStore.getAILockedTab()
+  const sessionId = lockedTab?.sessionId || tabStore.activeTab?.sessionId
   if (!sessionId) throw new Error('No active terminal session')
 
   const marker = `__AI_DONE_${Date.now()}_${Math.random().toString(36).slice(2, 8)}__`

@@ -1,4 +1,4 @@
-import { chat, AVAILABLE_TOOLS, addDebugLog } from './llm'
+import { chat, AVAILABLE_TOOLS } from './llm'
 import { executeCommand } from './terminalAgent'
 import { useAIStore } from '../stores/aiStore'
 import { useTabStore } from '../stores/tabStore'
@@ -115,7 +115,7 @@ export async function runAgent(userInput: string) {
   }
 
   let turnCount = 0
-  const maxTurns = 10
+  const maxTurns = 20
 
   while (turnCount < maxTurns) {
     turnCount++
@@ -153,7 +153,6 @@ export async function runAgent(userInput: string) {
         assistantMsg._rawApiMsg = chatOptions._rawApiMsg
       }
     } catch (e: any) {
-      addDebugLog(store, `LLM error: ${e.message ?? e}`)
       assistantMsg.content += `\n\n[Error: ${e.message ?? e}]`
       store.isRunning = false
       return
@@ -229,7 +228,26 @@ export async function runAgent(userInput: string) {
     }
   }
 
+  // Max turns reached - prompt user to continue
+  if (turnCount >= maxTurns) {
+    store.addMessage({
+      id: `msg-${Date.now()}`,
+      role: 'assistant',
+      content: `已达到最大对话轮次限制（${maxTurns}轮）。点击"继续"或发送任意消息以继续。`,
+      needsContinue: true
+    })
+  }
+
   store.isRunning = false
+}
+
+export async function continueAgent() {
+  const store = useAIStore()
+  const lastMsg = store.messages[store.messages.length - 1]
+  if (lastMsg?.needsContinue) {
+    store.messages.pop()
+  }
+  await runAgent('')
 }
 
 export async function approveTool(messageId: string) {
