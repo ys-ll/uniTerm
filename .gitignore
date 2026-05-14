@@ -30,6 +30,9 @@ Thumbs.db
 *.exe~
 *.test
 
+# Claude Code
+.claude/
+
 # Root package files (project uses frontend/ for Node.js)
 /package.json
 /package-lock.json
