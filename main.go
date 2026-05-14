@@ -36,7 +36,8 @@ func main() {
 	err := wails.Run(&options.App{
 		Title:  "uniTerm",
 		Width:  1200,
-		Height: 800,
+		Height:    800,
+		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
