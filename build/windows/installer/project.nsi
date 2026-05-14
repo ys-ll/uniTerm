@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 ManifestDPIAware true
 
 !define PRODUCT_NAME "uniTerm"
@@ -14,6 +14,7 @@ RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${BINARY}"
 
@@ -21,10 +22,38 @@ SetCompressor /SOLID lzma
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
+
+Function .onInit
+  Call CheckAndCloseProcess
+FunctionEnd
+
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "SimpChinese"
 !insertmacro MUI_LANGUAGE "English"
+
+Function CheckAndCloseProcess
+  check_process:
+  ; Use findstr to filter tasklist output: only match if process name appears in output
+  nsExec::ExecToStack 'cmd /c tasklist /FI "IMAGENAME eq ${BINARY}" /NH 2>nul | findstr /I "${BINARY}"'
+  Pop $0
+  Pop $1
+  ; findstr returns 0 only if the process name is found in output
+  ${If} $0 != "0"
+    Return
+  ${EndIf}
+
+  ; Process is running — ask user
+  MessageBox MB_YESNO|MB_ICONQUESTION "${PRODUCT_NAME} 正在运行。安装前需要先关闭它。是否强制关闭进程？" /SD IDYES IDNO no_kill
+  nsExec::ExecToStack 'cmd /c taskkill /F /IM "${BINARY}"'
+  Pop $0
+  Sleep 1500
+  Goto check_process
+
+  no_kill:
+  MessageBox MB_OK|MB_ICONEXCLAMATION "请手动关闭 ${PRODUCT_NAME} 后再继续安装。"
+  Abort
+FunctionEnd
 
 Section "Install"
   SetOutPath "$INSTDIR"
