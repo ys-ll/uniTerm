@@ -9,6 +9,7 @@
     <div class="main-content">
       <Sidebar :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" />
       <div class="tab-area">
+        <WorkspaceTabs />
         <SplitContainer :node="tabStore.splitRoot" />
       </div>
       <AISidebar />
@@ -37,6 +38,7 @@ import Sidebar from './components/Sidebar.vue'
 import SplitContainer from './components/SplitContainer.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
+import WorkspaceTabs from './components/WorkspaceTabs.vue'
 import { useConnectionStore } from './stores/connectionStore'
 import { useTabStore } from './stores/tabStore'
 import { useSessionStore } from './stores/sessionStore'
