@@ -10,7 +10,10 @@
       <Sidebar :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" />
       <div class="tab-area">
         <WorkspaceTabs />
-        <SplitContainer :node="tabStore.splitRoot" />
+        <Workspace
+          v-if="workspaceStore.activeWorkspace"
+          :workspace="workspaceStore.activeWorkspace"
+        />
       </div>
       <AISidebar />
     </div>
@@ -32,15 +35,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import Sidebar from './components/Sidebar.vue'
-import SplitContainer from './components/SplitContainer.vue'
+import Workspace from './components/Workspace.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
 import WorkspaceTabs from './components/WorkspaceTabs.vue'
 import { useConnectionStore } from './stores/connectionStore'
-import { useTabStore } from './stores/tabStore'
+import { useWorkspaceStore } from './stores/workspaceStore'
+import { usePanelStore } from './stores/panelStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useAIStore } from './stores/aiStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -49,7 +53,8 @@ import { CreateSession } from '../wailsjs/go/main/App'
 import type { ConnectionConfig } from './types/session'
 
 const connectionStore = useConnectionStore()
-const tabStore = useTabStore()
+const workspaceStore = useWorkspaceStore()
+const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
@@ -145,29 +150,19 @@ onUnmounted(() => {
   document.removeEventListener('click', closeInputMenu)
 })
 
-// Update settings tab title when language changes
-watch(() => settingsStore.language, () => {
-  const settingsTab = tabStore.tabs.find(t => t.type === 'settings')
-  if (settingsTab) {
-    settingsTab.title = t('settings.title')
-  }
-})
-
 function openSettings() {
-  const existing = tabStore.tabs.find(t => t.type === 'settings')
+  const existing = Array.from(panelStore.panels.values()).find(p => p.type === 'settings')
   if (existing) {
-    tabStore.setActiveTab(existing.id)
+    const ws = workspaceStore.workspaces.find(w => w.panelIds.includes(existing.id))
+    if (ws) {
+      workspaceStore.setActiveWorkspace(ws.id)
+    }
     return
   }
-  const tabId = `tab-settings-${Date.now()}`
-  const groupId = tabStore.activeTab?.groupId || 'default'
-  tabStore.addTab({
-    id: tabId,
-    sessionId: '',
-    title: t('settings.title'),
-    type: 'settings',
-    groupId
-  }, groupId)
+  const panel = panelStore.createPanel(null, 'settings')
+  panel.title = t('settings.title')
+  const workspace = workspaceStore.createWorkspace(t('settings.title'), panel.id)
+  panelStore.movePanelToWorkspace(panel.id, workspace.id)
 }
 
 function onSaveOnly(config: ConnectionConfig) {
@@ -175,35 +170,23 @@ function onSaveOnly(config: ConnectionConfig) {
 }
 
 async function onConnect(config: ConnectionConfig) {
-  // Save connection config to sidebar
   connectionStore.add(config)
-
-  const sessionType = config.type
-  const tabId = `tab-${Date.now()}`
-  const groupId = tabStore.activeTab?.groupId || 'default'
+  const panel = panelStore.createPanel(config, 'ssh')
   const displayTitle = config.name
     ? `${config.name} (${config.host})`
     : `${config.user}@${config.host}`
-
-  tabStore.addTab({
-    id: tabId,
-    sessionId: '',
-    title: displayTitle,
-    type: sessionType,
-    groupId,
-    config
-  }, groupId)
+  panel.title = displayTitle
+  const workspace = workspaceStore.createWorkspace(displayTitle, panel.id)
+  panelStore.movePanelToWorkspace(panel.id, workspace.id)
 
   try {
-    const info = await CreateSession(sessionType, config)
-    const tab = tabStore.tabs.find(t => t.id === tabId)
-    if (tab) {
-      tab.sessionId = info.id
-    }
+    const info = await CreateSession(config.type, config)
+    panelStore.bindSession(panel.id, info.id)
     sessionStore.initSession(info.id)
   } catch (e) {
     console.error('Failed to create session:', e)
-    tabStore.removeTab(tabId)
+    workspaceStore.closeWorkspace(workspace.id)
+    panelStore.removePanel(panel.id)
   }
 }
 </script>
