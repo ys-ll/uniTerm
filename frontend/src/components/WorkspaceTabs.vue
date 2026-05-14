@@ -1,5 +1,9 @@
 <template>
-  <div class="workspace-tabs">
+  <div
+    class="workspace-tabs"
+    @dragover.prevent
+    @drop="onTabsDrop"
+  >
     <div class="tabs-list" ref="tabsListRef">
       <WorkspaceTabItem
         v-for="workspace in workspaces"
@@ -20,9 +24,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useWorkspaceStore } from '../stores/workspaceStore'
+import { usePanelStore } from '../stores/panelStore'
 import WorkspaceTabItem from './WorkspaceTabItem.vue'
 
 const workspaceStore = useWorkspaceStore()
+const panelStore = usePanelStore()
 const workspaces = computed(() => workspaceStore.workspaces)
 const activeWorkspaceId = computed(() => workspaceStore.activeWorkspaceId)
 
@@ -39,6 +45,7 @@ function onTabDragStart(e: DragEvent, workspaceId: string) {
 }
 
 function onTabDrop(e: DragEvent, targetWorkspaceId: string) {
+  e.stopPropagation()
   const draggedId = e.dataTransfer?.getData('application/workspace-id')
   if (!draggedId || draggedId === targetWorkspaceId) return
 
@@ -47,6 +54,24 @@ function onTabDrop(e: DragEvent, targetWorkspaceId: string) {
   if (fromIdx !== -1 && toIdx !== -1) {
     workspaceStore.moveWorkspace(fromIdx, toIdx)
   }
+}
+
+function onTabsDrop(e: DragEvent) {
+  const panelId = e.dataTransfer?.getData('application/panel-id')
+  if (!panelId) return
+
+  const panel = panelStore.getPanel(panelId)
+  if (!panel) return
+
+  // Remove from current workspace
+  if (panel.workspaceId) {
+    workspaceStore.removePanelFromWorkspace(panel.workspaceId, panelId)
+  }
+
+  // Create new workspace with this panel
+  const workspace = workspaceStore.createWorkspace(panel.title)
+  workspaceStore.addPanelToWorkspace(workspace.id, panelId)
+  panelStore.movePanelToWorkspace(panelId, workspace.id)
 }
 </script>
 
