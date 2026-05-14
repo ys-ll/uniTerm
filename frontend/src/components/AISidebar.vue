@@ -131,7 +131,8 @@ import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Setting, Close, ArrowDown, Plus, Delete } from '@element-plus/icons-vue'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useTabStore } from '../stores/tabStore'
+import { useWorkspaceStore } from '../stores/workspaceStore'
+import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool, continueAgent } from '../services/agent'
 import type { ExecutionMode, AIConfig } from '../types/ai'
@@ -139,7 +140,8 @@ import AIMessage from './AIMessage.vue'
 
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
-const tabStore = useTabStore()
+const workspaceStore = useWorkspaceStore()
+const panelStore = usePanelStore()
 const { t } = useI18n()
 const input = ref('')
 
@@ -337,20 +339,18 @@ async function onContinue() {
 
 function openGlobalSettings() {
   settingsStore.openCategory = 'ai'
-  const existing = tabStore.tabs.find(t => t.type === 'settings')
+  const existing = Array.from(panelStore.panels.values()).find(p => p.type === 'settings')
   if (existing) {
-    tabStore.setActiveTab(existing.id)
+    const ws = workspaceStore.workspaces.find(w => w.panelIds.includes(existing.id))
+    if (ws) {
+      workspaceStore.setActiveWorkspace(ws.id)
+    }
     return
   }
-  const tabId = `tab-settings-${Date.now()}`
-  const groupId = tabStore.activeTab?.groupId || 'default'
-  tabStore.addTab({
-    id: tabId,
-    sessionId: '',
-    title: t('settings.title'),
-    type: 'settings',
-    groupId
-  }, groupId)
+  const panel = panelStore.createPanel(null, 'settings')
+  panel.title = t('settings.title')
+  const workspace = workspaceStore.createWorkspace(t('settings.title'), panel.id)
+  panelStore.movePanelToWorkspace(panel.id, workspace.id)
 }
 
 function onResizeStart(e: MouseEvent) {

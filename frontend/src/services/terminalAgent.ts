@@ -1,6 +1,7 @@
 import { EventsOn } from '../../wailsjs/runtime'
 import { SessionWrite } from '../../wailsjs/go/main/App'
-import { useTabStore } from '../stores/tabStore'
+import { useWorkspaceStore } from '../stores/workspaceStore'
+import { usePanelStore } from '../stores/panelStore'
 
 export interface ExecuteResult {
   output: string
@@ -8,11 +9,26 @@ export interface ExecuteResult {
 }
 
 export async function executeCommand(command: string): Promise<ExecuteResult> {
-  const tabStore = useTabStore()
-  // Check for AI-locked tab first
-  const lockedTab = tabStore.getAILockedTab()
-  const sessionId = lockedTab?.sessionId || tabStore.activeTab?.sessionId
-  if (!sessionId) throw new Error('No active terminal session')
+  const workspaceStore = useWorkspaceStore()
+  const panelStore = usePanelStore()
+
+  // Check for AI-locked panel first
+  const lockedPanelId = workspaceStore.getAILockedPanel()
+  let panel = lockedPanelId ? panelStore.getPanel(lockedPanelId) : null
+
+  if (!panel) {
+    // Fall back to active panel in active workspace
+    const workspace = workspaceStore.activeWorkspace
+    panel = workspace?.activePanelId
+      ? panelStore.getPanel(workspace.activePanelId)
+      : null
+  }
+
+  if (!panel || !panel.sessionId) {
+    throw new Error('No active terminal session')
+  }
+
+  const sessionId = panel.sessionId
 
   const marker = `__AI_DONE_${Date.now()}_${Math.random().toString(36).slice(2, 8)}__`
   const fullCommand = ` _u='${marker}';${command};echo "$_u"`
@@ -50,7 +66,6 @@ export async function executeCommand(command: string): Promise<ExecuteResult> {
       }
     })
 
-    // 60-second timeout for long-running commands
     timeoutId = setTimeout(() => {
       const cleanOutput = stripAnsi(output).trim()
       unsubscribe()
