@@ -28,8 +28,8 @@ EventsOn('session:data', (payload: { id: string; data: string }) => {
   const s = sessionState.sessions.get(payload.id)
   if (s) {
     s.data.push(payload.data)
-    if (s.data.length > 1000) {
-      s.data.splice(0, s.data.length - 500)
+    if (s.data.length > 2000) {
+      s.data.splice(0, s.data.length - 1000)
     }
   }
 })
@@ -50,8 +50,8 @@ export const useSessionStore = defineStore('session', () => {
     const s = sessionState.sessions.get(id)
     if (s) {
       s.data.push(chunk)
-      if (s.data.length > 1000) {
-        s.data.splice(0, s.data.length - 500)
+      if (s.data.length > 2000) {
+        s.data.splice(0, s.data.length - 1000)
       }
     }
   }

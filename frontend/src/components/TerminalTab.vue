@@ -33,18 +33,6 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useI18n } from '../i18n'
 import type { Tab } from '../types/session'
 
-function debounce(fn: () => void, delay: number) {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  return () => {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      timer = null
-      fn()
-    }, delay)
-  }
-}
-
-
 const props = defineProps<{
   tab: Tab
 }>()
@@ -78,7 +66,7 @@ function getTerminalOptions() {
   const themeName = ts.theme || 'dark'
   return {
     fontSize: ts.fontSize || 13,
-    fontFamily: ts.fontFamily || 'var(--font-mono)',
+    fontFamily: ts.fontFamily || 'Consolas, "Courier New", monospace',
     theme: getXtermTheme(themeName),
     cursorBlink: true,
     rightClickSelectsWord: false,
@@ -300,9 +288,22 @@ function notifyResize() {
   const rect = el.getBoundingClientRect()
 
   // Read xterm's internally-measured character dimensions.
-  const core = (terminal as any)._core
-  const dims = core?._renderService?.dimensions
-  if (!dims || dims.css.cell.width === 0 || dims.css.cell.height === 0) {
+  // Use try/catch because these are internal APIs that may change between versions.
+  let cellWidth = 0
+  let cellHeight = 0
+  try {
+    const core = (terminal as any)._core
+    const dims = core?._renderService?.dimensions
+    if (dims) {
+      cellWidth = dims.css?.cell?.width || 0
+      cellHeight = dims.css?.cell?.height || 0
+    }
+  } catch {
+    cellWidth = 0
+    cellHeight = 0
+  }
+
+  if (cellWidth === 0 || cellHeight === 0) {
     // Fallback to FitAddon if char dims aren't ready yet.
     fitAddon.fit()
     if (terminal.cols <= 0 || terminal.rows <= 0) return
@@ -313,13 +314,18 @@ function notifyResize() {
   // Use the container's actual rendered size (rect) to compute cols/rows.
   // terminal.element's clientWidth may not shrink when the container shrinks
   // because xterm's internal screen/canvas width can hold it at the old size.
-  const cols = Math.floor(rect.width / dims.css.cell.width)
-  const rows = Math.floor(rect.height / dims.css.cell.height)
+  const cols = Math.floor(rect.width / cellWidth)
+  const rows = Math.floor(rect.height / cellHeight)
   const newCols = Math.max(2, cols)
   const newRows = Math.max(1, rows)
 
   if (terminal.cols !== newCols || terminal.rows !== newRows) {
-    core._renderService.clear()
+    try {
+      const core = (terminal as any)._core
+      core?._renderService?.clear()
+    } catch {
+      // internal API may not exist
+    }
     terminal.resize(newCols, newRows)
     SessionResize(props.tab.sessionId, newCols, newRows).catch(() => {})
   }
@@ -412,7 +418,7 @@ onMounted(() => {
       clearTimeout(resizeTimer)
       resizeTimer = null
     }
-    suppressResizeUntil = Date.now() + 500
+    suppressResizeUntil = Date.now() + 200
     nextTick(() => {
       setTimeout(() => {
         // Force layout so getComputedStyle returns up-to-date dimensions

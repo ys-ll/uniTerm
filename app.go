@@ -160,6 +160,10 @@ func (a *App) CreateSession(sessionType string, config session.ConnectionConfig)
 				})
 			}
 			log.Writef("session %s connect error: %v", s.ID(), err)
+			// Remove failed session from manager to avoid leaking stale entries
+			if a.sessionManager != nil {
+				_ = a.sessionManager.Close(s.ID())
+			}
 		}
 	}()
 

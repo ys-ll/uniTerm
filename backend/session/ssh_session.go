@@ -141,8 +141,24 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	}
 
 	go s.readLoop()
+	go s.readStderr()
 
 	return nil
+}
+
+func (s *SSHSession) readStderr() {
+	buf := make([]byte, 4096)
+	for {
+		n, err := s.stderr.Read(buf)
+		if n > 0 {
+			// Prefix stderr output so it can be distinguished in the UI
+			data := append([]byte("\r\n\x1b[31m[stderr] \x1b[0m"), buf[:n]...)
+			s.emitData(data)
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 func (s *SSHSession) readLoop() {
