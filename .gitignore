@@ -19,7 +19,7 @@ node_modules/
 .vscode/
 
 # Internal docs
-specs/
+/specs/
 
 # OS files
 .DS_Store
