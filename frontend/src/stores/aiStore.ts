@@ -58,6 +58,25 @@ export const useAIStore = defineStore('ai', () => {
   const stopRequested = ref(false)
   const sessions = ref<AISession[]>(loadSessions())
   const currentSessionId = ref<string | null>(loadCurrentSessionId())
+  const lastDebugInfo = ref<{ request: string; error: string } | null>(null)
+
+  function setDebugInfo(request: unknown, error: string) {
+    try {
+      lastDebugInfo.value = {
+        request: JSON.stringify(request, null, 2),
+        error
+      }
+    } catch {
+      lastDebugInfo.value = {
+        request: String(request),
+        error
+      }
+    }
+  }
+
+  function clearDebugInfo() {
+    lastDebugInfo.value = null
+  }
 
   function toggle() {
     visible.value = !visible.value
@@ -232,10 +251,17 @@ export const useAIStore = defineStore('ai', () => {
 
   // Build Anthropic-native message array (system is separate top-level field)
   const conversation = computed(() => {
-    const MAX_CTX_MSGS = 100
+    const MAX_CTX_MSGS = 50
 
     // Take only recent messages to stay within context window
-    const recentMsgs = messages.value.slice(-MAX_CTX_MSGS)
+    let recentMsgs = messages.value.slice(-MAX_CTX_MSGS)
+
+    // Don't start the conversation with an orphaned tool_result whose matching
+    // tool_use was truncated out of the window. Strip leading tool messages
+    // until we hit a user or assistant message.
+    while (recentMsgs.length > 0 && recentMsgs[0].role === 'tool') {
+      recentMsgs.shift()
+    }
 
     // Collect all resolved tool_use IDs from tool_result messages
     const resolvedIds = new Set<string>()
@@ -251,12 +277,20 @@ export const useAIStore = defineStore('ai', () => {
       if (m.id.startsWith('dbg-')) continue
       if (m.needsContinue) continue  // UI-only prompts, not part of LLM conversation
 
-      // Tool results -> Anthropic tool_result blocks inside user-role messages
-      if (m.role === 'tool' && m.tool_call_id) {
-        result.push({
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content }]
-        })
+      // Tool messages: ones with tool_call_id are real tool_results for the API;
+      // ones without are display-only system errors and must not be sent.
+      if (m.role === 'tool') {
+        if (m.tool_call_id) {
+          result.push({
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: m.tool_call_id, content: m.content }]
+          })
+        }
+        continue
+      }
+
+      // Skip assistant messages that are API error placeholders from before the fix
+      if (m.role === 'assistant' && typeof m.content === 'string' && m.content.includes('[Error:')) {
         continue
       }
 
@@ -271,7 +305,7 @@ export const useAIStore = defineStore('ai', () => {
             }
             return true
           })
-          if (filtered.length === 0 && !m.content) continue
+          if (filtered.length === 0 && !m.content && !m.pendingTools?.length) continue
           result.push({ ...raw, content: filtered })
         } else {
           result.push({ ...raw })
@@ -303,7 +337,74 @@ export const useAIStore = defineStore('ai', () => {
       result.push({ role: m.role, content: m.content })
     }
 
-    return result
+    // Final safety pass: remove any dangling tool_use blocks that escaped filtering
+    // and orphaned tool_results whose matching tool_use is missing.
+    // This handles edge cases from truncated history or pre-fix conversations.
+    const toolResultIds = new Set<string>()
+    for (const msg of result) {
+      if (msg.role === 'user' && Array.isArray(msg.content)) {
+        for (const block of msg.content as Array<Record<string, unknown>>) {
+          if (block.type === 'tool_result') {
+            toolResultIds.add(block.tool_use_id as string)
+          }
+        }
+      }
+    }
+
+    const toolUseIds = new Set<string>()
+    for (const msg of result) {
+      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        for (const block of msg.content as Array<Record<string, unknown>>) {
+          if (block.type === 'tool_use') {
+            toolUseIds.add(block.id as string)
+          }
+        }
+      }
+    }
+
+    const cleaned: Array<Record<string, unknown>> = []
+    for (const msg of result) {
+      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        const blocks = (msg.content as Array<Record<string, unknown>>).filter((block) => {
+          if (block.type === 'tool_use') {
+            return toolResultIds.has(block.id as string)
+          }
+          return true
+        })
+        if (blocks.length === 0) continue
+        cleaned.push({ ...msg, content: blocks })
+      } else if (msg.role === 'user' && Array.isArray(msg.content)) {
+        const blocks = (msg.content as Array<Record<string, unknown>>).filter((block) => {
+          if (block.type === 'tool_result') {
+            return toolUseIds.has(block.tool_use_id as string)
+          }
+          return true
+        })
+        // Only skip the message if ALL tool_results were orphaned (nothing left).
+        // If valid tool_results remain, keep the message even if it's tool-only.
+        if (blocks.length === 0) {
+          continue
+        }
+        cleaned.push({ ...msg, content: blocks })
+      } else {
+        cleaned.push(msg)
+      }
+    }
+
+    // Additional validation: ensure no consecutive user messages ( Anthropic rejects this )
+    const deduped: Array<Record<string, unknown>> = []
+    for (const msg of cleaned) {
+      if (msg.role === 'user' && deduped.length > 0 && deduped[deduped.length - 1].role === 'user') {
+        const prev = deduped[deduped.length - 1]
+        const prevBlocks = Array.isArray(prev.content) ? prev.content : [{ type: 'text', text: prev.content }]
+        const msgBlocks = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: msg.content }]
+        prev.content = [...prevBlocks, ...msgBlocks]
+      } else {
+        deduped.push(msg)
+      }
+    }
+
+    return deduped
   })
 
   const systemPrompt = computed(() => SYSTEM_PROMPT)
@@ -333,6 +434,9 @@ export const useAIStore = defineStore('ai', () => {
     createSession,
     switchSession,
     deleteSession,
-    renameSession
+    renameSession,
+    lastDebugInfo,
+    setDebugInfo,
+    clearDebugInfo
   }
 })

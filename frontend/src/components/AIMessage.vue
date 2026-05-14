@@ -4,6 +4,13 @@
     <div class="content">
       <div class="text" v-html="renderedContent" />
 
+      <div v-if="isError && aiStore.lastDebugInfo" class="debug-actions">
+        <button class="debug-copy-btn" @click="copyDebugInfo">
+          <el-icon><DocumentCopy /></el-icon>
+          {{ copyLabel }}
+        </button>
+      </div>
+
       <div v-if="message.needsContinue" class="continue-box">
         <el-button type="primary" size="small" @click="$emit('continue')">
           {{ t('ai.continue') }}
@@ -59,6 +66,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { DocumentCopy } from '@element-plus/icons-vue'
 import { useAIStore } from '../stores/aiStore'
 import { useI18n } from '../i18n'
 import type { AIMessage } from '../types/ai'
@@ -70,12 +78,35 @@ const aiStore = useAIStore()
 const { t } = useI18n()
 const inExpanded = ref(false)
 const outExpanded = ref(false)
+const copyLabel = ref(t('ai.copyDebug'))
 
 const avatar = computed(() => {
   if (props.message.role === 'user') return t('ai.avatarUser')
   if (props.message.role === 'tool') return t('ai.avatarTool')
   return t('ai.avatarAI')
 })
+
+const isError = computed(() => {
+  const content = props.message.content
+  if (!content) return false
+  const hasErrorText = content.includes('[Error:')
+  // Assistant errors (legacy) or display-only tool errors
+  return (props.message.role === 'assistant' || (props.message.role === 'tool' && !props.message.tool_call_id)) && hasErrorText
+})
+
+async function copyDebugInfo() {
+  const info = aiStore.lastDebugInfo
+  if (!info) return
+  const text = `## Error\n\n${info.error}\n\n## Request\n\n\`\`\`json\n${info.request}\n\`\`\``
+  try {
+    await navigator.clipboard.writeText(text)
+    copyLabel.value = t('ai.copied')
+    setTimeout(() => { copyLabel.value = t('ai.copyDebug') }, 2000)
+  } catch {
+    copyLabel.value = t('ai.copyFailed')
+    setTimeout(() => { copyLabel.value = t('ai.copyDebug') }, 2000)
+  }
+}
 
 function formatArgs(args: string): string {
   try {
@@ -458,5 +489,29 @@ function escapeHtml(text: string): string {
 
 .continue-box {
   margin-top: 8px;
+}
+
+.debug-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 8px;
+}
+.debug-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.debug-copy-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent-glow);
+  background: var(--accent-subtle);
 }
 </style>

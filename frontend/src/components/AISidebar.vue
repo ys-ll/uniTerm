@@ -127,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Setting, Close, ArrowDown, Plus, Delete } from '@element-plus/icons-vue'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -145,7 +145,10 @@ const input = ref('')
 
 const visibleMessages = computed(() => {
   return aiStore.messages.filter(m => {
-    if (m.role === 'tool') return false
+    // Real tool_results (with tool_call_id) are shown via assistant's tool_calls, hide them here
+    if (m.role === 'tool' && m.tool_call_id) return false
+    // Display-only tool messages (system errors, no tool_call_id) should be visible
+    if (m.role === 'tool' && !m.tool_call_id) return true
     if (m.role !== 'assistant') return true
     // 过滤掉内容为空且没有可展示内容的 assistant 消息
     return m.content || m.tool_calls?.length || m.pendingTools?.length || m.needsContinue
@@ -158,6 +161,8 @@ const isResizing = ref(false)
 const sidebarEl = ref<HTMLDivElement>()
 const aiMenuVisible = ref(false)
 const aiMenuStyle = ref({ left: '0px', top: '0px' })
+const isAtBottom = ref(true)
+let mutationObserver: MutationObserver | null = null
 
 const currentSessionName = computed(() => {
   const s = aiStore.sessions.find(s => s.id === aiStore.currentSessionId)
@@ -221,8 +226,21 @@ function scrollToBottom() {
   nextTick(() => {
     if (messagesRef.value) {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+      isAtBottom.value = true
     }
   })
+}
+
+function onMessagesScroll() {
+  if (!messagesRef.value) return
+  const el = messagesRef.value
+  isAtBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 30
+}
+
+function autoScrollToBottom() {
+  if (isAtBottom.value && messagesRef.value) {
+    messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+  }
 }
 
 function closeAIMenu() {
@@ -272,6 +290,11 @@ function onSessionCommand(command: string) {
     aiStore.switchSession(command)
   }
 }
+
+watch(() => aiStore.currentSessionId, () => {
+  isAtBottom.value = true
+  scrollToBottom()
+})
 
 function onKeydownEnter(e: KeyboardEvent) {
   if (e.shiftKey) {
@@ -373,12 +396,28 @@ onMounted(() => {
   window.addEventListener('ai:ask', onAskAI)
   window.addEventListener('global:close-context-menus', closeAIMenu)
   document.addEventListener('click', closeAIMenu)
+
+  if (messagesRef.value) {
+    messagesRef.value.addEventListener('scroll', onMessagesScroll)
+    mutationObserver = new MutationObserver(() => {
+      if (isAtBottom.value) {
+        autoScrollToBottom()
+      }
+    })
+    mutationObserver.observe(messagesRef.value, { childList: true, subtree: true })
+  }
+  scrollToBottom()
 })
 
 onUnmounted(() => {
   window.removeEventListener('ai:ask', onAskAI)
   window.removeEventListener('global:close-context-menus', closeAIMenu)
   document.removeEventListener('click', closeAIMenu)
+
+  if (messagesRef.value) {
+    messagesRef.value.removeEventListener('scroll', onMessagesScroll)
+  }
+  mutationObserver?.disconnect()
 })
 </script>
 

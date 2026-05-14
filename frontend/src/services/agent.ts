@@ -153,12 +153,35 @@ export async function runAgent(userInput: string) {
         assistantMsg._rawApiMsg = chatOptions._rawApiMsg
       }
     } catch (e: any) {
-      assistantMsg.content += `\n\n[Error: ${e.message ?? e}]`
+      const errMsg = e.message ?? String(e)
+      // Convert the failed assistant placeholder to a display-only tool message.
+      // This keeps the error visible in the UI without polluting the API conversation.
+      assistantMsg.role = 'tool'
+      assistantMsg.content = `[Error: ${errMsg}]`
+      delete assistantMsg._rawApiMsg
+      delete assistantMsg.tool_calls
+      store.setDebugInfo(store.conversation, errMsg)
       store.isRunning = false
       return
     }
 
     if (store.stopRequested) {
+      // Cancel any tool calls that were received but not executed
+      const cancelledIds = new Set<string>()
+      const rawContent = assistantMsg._rawApiMsg?.content
+      if (Array.isArray(rawContent)) {
+        for (const block of rawContent) {
+          if (block.type === 'tool_use' && !cancelledIds.has(block.id)) {
+            store.addMessage({
+              id: `msg-${Date.now()}`,
+              role: 'tool',
+              content: 'Command was cancelled by user (Stop).',
+              tool_call_id: block.id
+            })
+            cancelledIds.add(block.id)
+          }
+        }
+      }
       store.isRunning = false
       return
     }

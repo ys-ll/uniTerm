@@ -65,7 +65,7 @@ const messages: Record<Locale, Record<string, string>> = {
     'input.selectAll': '全选',
 
     // AISidebar
-    'ai.title': 'AI 助手',
+    'ai.title': 'AI 助理',
     'ai.settings': '设置',
     'ai.close': '关闭',
     'ai.newSession': '新建会话',
@@ -95,6 +95,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'ai.avatarUser': '你',
     'ai.avatarTool': '工具',
     'ai.avatarAI': 'AI',
+    'ai.copyDebug': '复制调试信息',
+    'ai.copied': '已复制',
+    'ai.copyFailed': '复制失败',
 
     // SettingsTab
     'settings.title': '设置',
@@ -232,6 +235,9 @@ const messages: Record<Locale, Record<string, string>> = {
     'ai.avatarUser': 'You',
     'ai.avatarTool': 'Tool',
     'ai.avatarAI': 'AI',
+    'ai.copyDebug': 'Copy Debug Info',
+    'ai.copied': 'Copied',
+    'ai.copyFailed': 'Copy Failed',
 
     // SettingsTab
     'settings.title': 'Settings',
