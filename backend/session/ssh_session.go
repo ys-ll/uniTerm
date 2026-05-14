@@ -85,7 +85,7 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 		ssh.TTY_OP_OSPEED: 14400,
 	}
 
-	if err := session.RequestPty("xterm-256color", 24, 240, modes); err != nil {
+	if err := session.RequestPty("xterm-256color", 24, 80, modes); err != nil {
 		session.Close()
 		client.Close()
 		s.setStatus(StatusError)
@@ -135,6 +135,11 @@ func (s *SSHSession) Connect(config ConnectionConfig) error {
 	s.stderr = stderrPipe
 	s.setStatus(StatusConnected)
 
+	// Apply pending terminal size if one was set before connection.
+	if cols, rows := s.GetPendingSize(); cols > 0 && rows > 0 {
+		_ = s.session.WindowChange(rows, cols)
+	}
+
 	go s.readLoop()
 
 	return nil
@@ -180,6 +185,8 @@ func (s *SSHSession) Disconnect() error {
 }
 
 func (s *SSHSession) Resize(cols, rows int) error {
+	// Always save the desired size so it can be applied after Connect finishes.
+	s.SetPendingSize(cols, rows)
 	if s.session == nil {
 		return fmt.Errorf("session not connected")
 	}

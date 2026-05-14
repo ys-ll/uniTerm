@@ -55,6 +55,8 @@ type baseSession struct {
 	onDataCallback   func([]byte)
 	onStatusCallback func(SessionStatus)
 	mu               sync.RWMutex
+	pendingCols      int
+	pendingRows      int
 }
 
 func (s *baseSession) ID() string            { return s.id }
@@ -89,4 +91,17 @@ func (s *baseSession) emitData(data []byte) {
 	if cb != nil {
 		cb(data)
 	}
+}
+
+func (s *baseSession) SetPendingSize(cols, rows int) {
+	s.mu.Lock()
+	s.pendingCols = cols
+	s.pendingRows = rows
+	s.mu.Unlock()
+}
+
+func (s *baseSession) GetPendingSize() (cols, rows int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pendingCols, s.pendingRows
 }
