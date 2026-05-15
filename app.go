@@ -111,6 +111,19 @@ func (a *App) LoadSettings() (store.AppSettings, error) {
 	return a.settingsStore.Load()
 }
 
+func (a *App) OpenFileDialog() (string, error) {
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select File",
+	})
+}
+
+func (a *App) SaveFileDialog(defaultName string) (string, error) {
+	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save File",
+		DefaultFilename: defaultName,
+	})
+}
+
 func (a *App) OnConnectionsChanged(callback func([]session.ConnectionConfig)) {
 	runtime.EventsOn(a.ctx, "store:connections:changed", func(optionalData ...interface{}) {
 		if len(optionalData) > 0 {
