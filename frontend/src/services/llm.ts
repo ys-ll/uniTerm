@@ -13,6 +13,22 @@ export interface ChatOptions {
   onToolUse?: (tool: { id: string; name: string; input: Record<string, unknown> }) => void
 }
 
+function formatAPIError(raw: string): string {
+  // Parse Go backend error format: "HTTP <code>: <json body>"
+  const match = raw.match(/^HTTP\s+(\d+):\s*(.+)/)
+  if (!match) return `API Error: ${raw}`
+
+  const code = match[1]
+  const bodyStr = match[2]
+  try {
+    const body = JSON.parse(bodyStr)
+    const msg = body?.error?.message || body?.message || bodyStr
+    return `API Error: ${code} ${msg}`
+  } catch {
+    return `API Error: ${code} ${bodyStr}`
+  }
+}
+
 export async function chat(options: ChatOptions): Promise<void> {
   const settingsStore = useSettingsStore()
   const activeModel = settingsStore.activeModel
@@ -37,7 +53,7 @@ export async function chat(options: ChatOptions): Promise<void> {
   try {
     responseText = await ChatCompletion(apiKey, baseURL, model, requestJSON, 'anthropic')
   } catch (e: any) {
-    throw new Error(`LLM API request failed: ${e}`)
+    throw new Error(formatAPIError(e?.message || String(e)))
   }
 
   let json: any

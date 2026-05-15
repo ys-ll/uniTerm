@@ -1,28 +1,35 @@
 <template>
   <div class="panel-grid">
     <RenderNode
-      :node="workspace.layout.root"
-      :workspace="workspace"
+      :node="layout.root"
+      :panel-ids="panelIds"
+      :active-panel-id="activePanelId"
+      :tab-id="tabId"
       @close-panel="$emit('closePanel', $event)"
-      @panel-drag-start="$emit('panelDragStart', $event)"
-      @panel-drop="$emit('panelDrop', $event)"
+      @toggle-ai-lock="$emit('toggleAiLock', $event)"
+      @panel-drag-start="(e, id) => $emit('panelDragStart', e, id)"
+      @panel-drop="(e, id, rect) => $emit('panelDrop', e, id, rect)"
       @resize="$emit('resize', $event)"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import type { Workspace } from '../types/workspace'
+import type { PanelLayout } from '../types/workspace'
 import RenderNode from './RenderNode.vue'
 
 defineProps<{
-  workspace: Workspace
+  layout: PanelLayout
+  panelIds: string[]
+  activePanelId: string | null
+  tabId: string
 }>()
 
 defineEmits<{
   closePanel: [panelId: string]
+  toggleAiLock: [panelId: string]
   panelDragStart: [e: DragEvent, panelId: string]
-  panelDrop: [e: DragEvent, targetPanelId: string]
+  panelDrop: [e: DragEvent, targetPanelId: string, rect?: DOMRect]
   resize: [payload: { node: any, index: number, delta: number }]
 }>()
 </script>

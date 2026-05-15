@@ -13,7 +13,7 @@ export const usePanelStore = defineStore('panel', () => {
     const id = `panel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const panel: Panel = {
       id,
-      workspaceId: '',
+      tabId: '',
       type,
       sessionId: null,
       title: config ? `${config.host} ${config.user}` : 'New Panel',
@@ -47,9 +47,9 @@ export const usePanelStore = defineStore('panel', () => {
     if (p) p.title = title
   }
 
-  function movePanelToWorkspace(panelId: string, workspaceId: string) {
+  function movePanelToTab(panelId: string, tabId: string) {
     const p = panelState.panels.get(panelId)
-    if (p) p.workspaceId = workspaceId
+    if (p) p.tabId = tabId
   }
 
   return {
@@ -60,6 +60,6 @@ export const usePanelStore = defineStore('panel', () => {
     bindSession,
     updateStatus,
     updateTitle,
-    movePanelToWorkspace
+    movePanelToTab
   }
 })

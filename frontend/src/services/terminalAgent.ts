@@ -1,6 +1,6 @@
 import { EventsOn } from '../../wailsjs/runtime'
 import { SessionWrite } from '../../wailsjs/go/main/App'
-import { useWorkspaceStore } from '../stores/workspaceStore'
+import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 
 export interface ExecuteResult {
@@ -9,19 +9,20 @@ export interface ExecuteResult {
 }
 
 export async function executeCommand(command: string): Promise<ExecuteResult> {
-  const workspaceStore = useWorkspaceStore()
+  const tabStore = useTabStore()
   const panelStore = usePanelStore()
 
   // Check for AI-locked panel first
-  const lockedPanelId = workspaceStore.getAILockedPanel()
+  const lockedPanelId = tabStore.getAILockedPanel()
   let panel = lockedPanelId ? panelStore.getPanel(lockedPanelId) : null
 
   if (!panel) {
-    // Fall back to active panel in active workspace
-    const workspace = workspaceStore.activeWorkspace
-    panel = workspace?.activePanelId
-      ? panelStore.getPanel(workspace.activePanelId)
-      : null
+    const activeTab = tabStore.activeTab
+    if (activeTab?.type === 'terminal' || activeTab?.type === 'settings') {
+      panel = panelStore.getPanel(activeTab.panelId)
+    } else if (activeTab?.type === 'workspace' && activeTab.activePanelId) {
+      panel = panelStore.getPanel(activeTab.activePanelId)
+    }
   }
 
   if (!panel || !panel.sessionId) {

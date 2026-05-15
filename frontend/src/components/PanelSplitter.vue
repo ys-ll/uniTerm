@@ -16,18 +16,27 @@ const emit = defineEmits<{
 }>()
 
 function onMouseDown(e: MouseEvent) {
-  const startPos = props.direction === 'horizontal' ? e.clientX : e.clientY
+  e.preventDefault()
+  window.dispatchEvent(new CustomEvent('split:resize-start'))
+  const direction = props.direction
+  const splitter = e.currentTarget as HTMLElement
+  const grid = splitter.parentElement
+  const gridRect = grid?.getBoundingClientRect()
+  const gridSize = direction === 'horizontal' ? (gridRect?.width || 400) : (gridRect?.height || 400)
+  let lastPos = direction === 'horizontal' ? e.clientX : e.clientY
 
   function onMove(ev: MouseEvent) {
-    const currentPos = props.direction === 'horizontal' ? ev.clientX : ev.clientY
-    emit('resize', currentPos - startPos)
-    // Update startPos for continuous delta
-    // Actually, emit cumulative delta is simpler
+    ev.preventDefault()
+    const currentPos = direction === 'horizontal' ? ev.clientX : ev.clientY
+    const delta = currentPos - lastPos
+    lastPos = currentPos
+    emit('resize', delta / gridSize)
   }
 
   function onUp() {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
+    window.dispatchEvent(new CustomEvent('split:resize-end'))
   }
 
   document.addEventListener('mousemove', onMove)

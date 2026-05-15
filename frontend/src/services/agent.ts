@@ -2,10 +2,36 @@ import { chat, AVAILABLE_TOOLS } from './llm'
 import { executeCommand } from './terminalAgent'
 import { useAIStore } from '../stores/aiStore'
 import { useTabStore } from '../stores/tabStore'
+import { usePanelStore } from '../stores/panelStore'
+
+function getActivePanel() {
+  const tabStore = useTabStore()
+  const panelStore = usePanelStore()
+
+  // Check for AI-locked panel first
+  const lockedPanelId = tabStore.getAILockedPanel()
+  if (lockedPanelId) {
+    return panelStore.getPanel(lockedPanelId)
+  }
+
+  // Fall back to active panel based on tab type
+  const activeTab = tabStore.activeTab
+  if (!activeTab) return undefined
+
+  if (activeTab.type === 'terminal' || activeTab.type === 'settings') {
+    return panelStore.getPanel(activeTab.panelId)
+  }
+
+  if (activeTab.type === 'workspace' && activeTab.activePanelId) {
+    return panelStore.getPanel(activeTab.activePanelId)
+  }
+
+  return undefined
+}
 
 function hasActiveSession(): boolean {
-  const tabStore = useTabStore()
-  return !!tabStore.activeTab?.sessionId
+  const panel = getActivePanel()
+  return !!panel?.sessionId
 }
 
 function isDangerousCommand(command: string): boolean {
@@ -51,18 +77,15 @@ function shouldConfirm(dangerous: boolean): boolean {
 
 function buildSystemPrompt(): string {
   const store = useAIStore()
-  const tabStore = useTabStore()
-  const activeTab = tabStore.activeTab
+  const activePanel = getActivePanel()
 
   let base = store.systemPrompt
-  if (!activeTab) return base
+  if (!activePanel) return base
 
   const parts: string[] = []
-  parts.push(`Current active terminal tab: "${activeTab.title}" (id: ${activeTab.id}, type: ${activeTab.type})`)
-  if (activeTab.type === 'ssh' && activeTab.config) {
-    parts.push(`Connected to: ${activeTab.config.user}@${activeTab.config.host}:${activeTab.config.port}`)
-  } else if (activeTab.type === 'local') {
-    parts.push('This is a local terminal session.')
+  parts.push(`Current active terminal panel: "${activePanel.title}" (id: ${activePanel.id}, type: ${activePanel.type})`)
+  if (activePanel.type === 'ssh' && activePanel.config) {
+    parts.push(`Connected to: ${activePanel.config.user}@${activePanel.config.host}:${activePanel.config.port}`)
   }
 
   return base + '\n\n--- Current Context ---\n' + parts.join('\n') + '\n---'

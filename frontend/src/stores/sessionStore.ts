@@ -18,25 +18,34 @@ const sessionState = reactive<{
 
 // Register event listeners once at module level
 EventsOn('session:status', (payload: { id: string; status: SessionStatus }) => {
-  const s = sessionState.sessions.get(payload.id)
-  if (s) {
-    s.status = payload.status
+  let s = sessionState.sessions.get(payload.id)
+  if (!s) {
+    s = { id: payload.id, status: 'connecting', data: [] }
+    sessionState.sessions.set(payload.id, s)
   }
+  s.status = payload.status
 })
 
 EventsOn('session:data', (payload: { id: string; data: string }) => {
-  const s = sessionState.sessions.get(payload.id)
-  if (s) {
-    s.data.push(payload.data)
-    if (s.data.length > 2000) {
-      s.data.splice(0, s.data.length - 1000)
-    }
+  let s = sessionState.sessions.get(payload.id)
+  if (!s) {
+    s = { id: payload.id, status: 'connecting', data: [] }
+    sessionState.sessions.set(payload.id, s)
+  }
+  s.data.push(payload.data)
+  if (s.data.length > 2000) {
+    s.data.splice(0, s.data.length - 1000)
   }
 })
 
 export const useSessionStore = defineStore('session', () => {
   function initSession(id: string) {
-    sessionState.sessions.set(id, { id, status: 'connecting', data: [] })
+    const existing = sessionState.sessions.get(id)
+    if (existing) {
+      existing.status = 'connecting'
+    } else {
+      sessionState.sessions.set(id, { id, status: 'connecting', data: [] })
+    }
   }
 
   function updateStatus(id: string, status: SessionStatus) {

@@ -1,254 +1,410 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import type { Tab, SplitNode } from '../types/session'
+import { reactive, computed } from 'vue'
+import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, PanelLayout, LayoutNode } from '../types/workspace'
+import { usePanelStore } from './panelStore'
 
-function newNode(overrides: Partial<SplitNode> = {}): SplitNode {
-  return {
-    id: `node-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    direction: null,
-    children: [],
-    ratio: 0.5,
-    ...overrides
-  }
+const tabState = reactive<{
+  tabs: Tab[]
+  activeTabId: string | null
+  aiLockedPanelId: string | null
+}>({
+  tabs: [],
+  activeTabId: null,
+  aiLockedPanelId: null
+})
+
+let idCounter = 0
+function genId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${++idCounter}`
+}
+
+function generateWorkspaceName(existingTabs: Tab[]): string {
+  const base = 'Workspace'
+  const existingNames = existingTabs.filter(t => t.type === 'workspace').map(t => t.name)
+  if (!existingNames.includes(base)) return base
+  let i = 2
+  while (existingNames.includes(`Workspace (${i})`)) i++
+  return `Workspace (${i})`
 }
 
 export const useTabStore = defineStore('tab', () => {
-  const tabs = ref<Tab[]>([])
-  const activeTabId = ref<string | null>(null)
-  const activeTabByGroup = ref<Record<string, string>>({})
-  const draggingTabId = ref<string | null>(null)
-  const splitRoot = ref<SplitNode>({
-    id: 'root',
-    direction: null,
-    children: [],
-    tabGroupId: 'default',
-    ratio: 1
-  })
-
+  const tabs = computed(() => tabState.tabs)
+  const activeTabId = computed(() => tabState.activeTabId)
   const activeTab = computed(() =>
-    tabs.value.find(t => t.id === activeTabId.value) ?? null
+    tabState.tabs.find(t => t.id === tabState.activeTabId) || null
   )
+  const aiLockedPanelId = computed(() => tabState.aiLockedPanelId)
 
-  function activeTabForGroup(groupId: string): string | null {
-    if (activeTabByGroup.value[groupId]) return activeTabByGroup.value[groupId]
-    const firstTab = tabs.value.find(t => t.groupId === groupId)
-    return firstTab?.id || null
-  }
+  // ── Create tabs ──
 
-  // ── Tab basics ──
-
-  function addTab(tab: Tab, groupId: string = 'default') {
-    tab.groupId = groupId
-    tabs.value.push(tab)
-    activeTabId.value = tab.id
-    activeTabByGroup.value[groupId] = tab.id
-  }
-
-  function removeTab(tabId: string) {
-    const tab = tabs.value.find(t => t.id === tabId)
-    const groupId = tab?.groupId
-    const idx = tabs.value.findIndex(t => t.id === tabId)
-    if (idx >= 0) {
-      tabs.value.splice(idx, 1)
+  function createTerminalTab(name: string, panelId: string): TerminalTab {
+    const tab: TerminalTab = {
+      type: 'terminal',
+      id: genId('term-tab'),
+      panelId,
+      name
     }
-    if (activeTabId.value === tabId) {
-      const sameGroupTabs = tabs.value.filter(t => t.groupId === groupId)
-      const next = sameGroupTabs.length > 0
-        ? sameGroupTabs[0].id
-        : (tabs.value.length > 0 ? tabs.value[0].id : null)
-      activeTabId.value = next
-      if (next && groupId) {
-        activeTabByGroup.value[groupId] = next
-      }
+    tabState.tabs.push(tab)
+    tabState.activeTabId = tab.id
+    return tab
+  }
+
+  function createSettingsTab(name: string, panelId: string): SettingsTab {
+    const tab: SettingsTab = {
+      type: 'settings',
+      id: genId('settings-tab'),
+      panelId,
+      name
     }
-    if (groupId && !tabs.value.some(t => t.groupId === groupId)) {
-      delete activeTabByGroup.value[groupId]
-      removeEmptyGroup(splitRoot.value, groupId)
+    tabState.tabs.push(tab)
+    tabState.activeTabId = tab.id
+    return tab
+  }
+
+  function createWorkspaceTab(name: string, panelIds: string[], layout: PanelLayout): WorkspaceTab {
+    const tab: WorkspaceTab = {
+      type: 'workspace',
+      id: genId('ws-tab'),
+      name,
+      panelIds: [...panelIds],
+      layout,
+      activePanelId: panelIds[0] || null
     }
+    tabState.tabs.push(tab)
+    tabState.activeTabId = tab.id
+    return tab
   }
 
-  function setActiveTab(tabId: string) {
-    const tab = tabs.value.find(t => t.id === tabId)
-    activeTabId.value = tabId
-    if (tab?.groupId) {
-      activeTabByGroup.value[tab.groupId] = tabId
-    }
-  }
+  // ── Close tab ──
 
-  function updateTabTitle(tabId: string, title: string) {
-    const tab = tabs.value.find(t => t.id === tabId)
-    if (tab) tab.title = title
-  }
+  function closeTab(id: string): string[] {
+    const idx = tabState.tabs.findIndex(t => t.id === id)
+    if (idx === -1) return []
+    const removed = tabState.tabs.splice(idx, 1)[0]
 
-  // ── AI Lock ──
-
-  function toggleAILock(tabId: string) {
-    const tab = tabs.value.find(t => t.id === tabId)
-    if (!tab || tab.type !== 'ssh') return
-
-    if (tab.aiLocked) {
-      tab.aiLocked = false
-    } else {
-      // Unlock any other locked tab (only one tab locked at a time)
-      for (const t of tabs.value) {
-        if (t.id !== tabId) t.aiLocked = false
-      }
-      tab.aiLocked = true
-    }
-  }
-
-  function getAILockedTab(): Tab | undefined {
-    return tabs.value.find(t => t.aiLocked && t.type === 'ssh')
-  }
-
-  // ── Split tree: move tab between groups ──
-
-  function moveTab(tabId: string, targetGroupId: string) {
-    const tab = tabs.value.find(t => t.id === tabId)
-    if (!tab) return
-    const sourceGroupId = tab.groupId
-    if (sourceGroupId === targetGroupId) return
-
-    tab.groupId = targetGroupId
-    activeTabId.value = tabId
-    activeTabByGroup.value[targetGroupId] = tabId
-
-    // Update source group's active tab
-    if (sourceGroupId) {
-      const remaining = tabs.value.find(t => t.groupId === sourceGroupId)
-      if (remaining) {
-        activeTabByGroup.value[sourceGroupId] = remaining.id
+    if (tabState.activeTabId === id) {
+      // Activate nearest tab (prefer right, then left)
+      if (tabState.tabs.length > 0) {
+        const newIdx = Math.min(idx, tabState.tabs.length - 1)
+        tabState.activeTabId = tabState.tabs[newIdx].id
       } else {
-        delete activeTabByGroup.value[sourceGroupId]
-        removeEmptyGroup(splitRoot.value, sourceGroupId)
+        tabState.activeTabId = null
       }
+    }
+
+    // Clear AI lock if locked panel was in this tab
+    const removedPanelIds = removed.type === 'terminal' || removed.type === 'settings'
+      ? [removed.panelId]
+      : removed.type === 'workspace'
+        ? removed.panelIds
+        : []
+
+    if (tabState.aiLockedPanelId && removedPanelIds.includes(tabState.aiLockedPanelId)) {
+      tabState.aiLockedPanelId = null
+    }
+
+    return removedPanelIds
+  }
+
+  // ── Activate / reorder / rename ──
+
+  function setActiveTab(id: string) {
+    tabState.activeTabId = id
+  }
+
+  function moveTab(fromIdx: number, toIdx: number) {
+    const [t] = tabState.tabs.splice(fromIdx, 1)
+    tabState.tabs.splice(toIdx, 0, t)
+  }
+
+  function renameTab(id: string, name: string) {
+    const t = tabState.tabs.find(x => x.id === id)
+    if (t) t.name = name
+  }
+
+  // ── Workspace panel management ──
+
+  function setActivePanel(tabId: string, panelId: string) {
+    const t = tabState.tabs.find(x => x.id === tabId)
+    if (t && t.type === 'workspace') {
+      t.activePanelId = panelId
     }
   }
 
-  // ── Split tree: create split via edge drag ──
+  function updateWorkspaceLayout(tabId: string, layout: PanelLayout) {
+    const t = tabState.tabs.find(x => x.id === tabId)
+    if (t && t.type === 'workspace') {
+      t.layout = layout
+      // Sync panelIds from layout
+      t.panelIds = collectPanelIds(layout.root)
+    }
+  }
 
-  function createSplit(
-    tabId: string,
+  // ── Merge: two terminal tabs → workspace tab ──
+
+  function mergeToWorkspace(
+    terminalTabAId: string,
+    terminalTabBId: string,
     direction: 'horizontal' | 'vertical',
-    edge: 'top' | 'bottom' | 'left' | 'right',
-    targetGroupId?: string
+    insertBefore: boolean
+  ): WorkspaceTab | null {
+    const idxA = tabState.tabs.findIndex(t => t.id === terminalTabAId)
+    const idxB = tabState.tabs.findIndex(t => t.id === terminalTabBId)
+    if (idxA === -1 || idxB === -1) return null
+
+    const tabA = tabState.tabs[idxA] as TerminalTab
+    const tabB = tabState.tabs[idxB] as TerminalTab
+    if (tabA.type !== 'terminal' || tabB.type !== 'terminal') return null
+
+    const children = insertBefore
+      ? [{ type: 'leaf' as const, panelId: tabA.panelId }, { type: 'leaf' as const, panelId: tabB.panelId }]
+      : [{ type: 'leaf' as const, panelId: tabB.panelId }, { type: 'leaf' as const, panelId: tabA.panelId }]
+
+    const layout: PanelLayout = {
+      root: {
+        type: 'split',
+        direction,
+        sizes: [0.5, 0.5],
+        children
+      }
+    }
+
+    const workspaceTab: WorkspaceTab = {
+      type: 'workspace',
+      id: genId('ws-tab'),
+      name: generateWorkspaceName(tabState.tabs),
+      panelIds: [tabA.panelId, tabB.panelId],
+      layout,
+      activePanelId: tabB.panelId
+    }
+
+    // Remove in reverse order to preserve indices
+    const removeIdxA = tabState.tabs.findIndex(t => t.id === terminalTabAId)
+    const removeIdxB = tabState.tabs.findIndex(t => t.id === terminalTabBId)
+    if (removeIdxA > removeIdxB) {
+      tabState.tabs.splice(removeIdxA, 1)
+      tabState.tabs.splice(removeIdxB, 1)
+    } else {
+      tabState.tabs.splice(removeIdxB, 1)
+      tabState.tabs.splice(removeIdxA, 1)
+    }
+
+    // Re-associate panels with the new workspace tab
+    const panelStore = usePanelStore()
+    panelStore.movePanelToTab(tabA.panelId, workspaceTab.id)
+    panelStore.movePanelToTab(tabB.panelId, workspaceTab.id)
+
+    // Insert workspace tab at the position of the first removed tab
+    const insertIdx = Math.min(removeIdxA, removeIdxB)
+    tabState.tabs.splice(insertIdx, 0, workspaceTab)
+    tabState.activeTabId = workspaceTab.id
+
+    return workspaceTab
+  }
+
+  // ── Merge: terminal tab → existing workspace tab ──
+
+  function addPanelToWorkspaceTab(
+    terminalTabId: string,
+    workspaceTabId: string,
+    targetPanelId: string,
+    direction: 'horizontal' | 'vertical',
+    insertBefore: boolean
   ) {
-    const tab = tabs.value.find(t => t.id === tabId)
-    if (!tab) return
+    const termIdx = tabState.tabs.findIndex(t => t.id === terminalTabId)
+    const wsTab = tabState.tabs.find(t => t.id === workspaceTabId)
+    if (termIdx === -1 || !wsTab || wsTab.type !== 'workspace') return
 
-    const sourceGroupId = tab.groupId || 'default'
-    const newGroupId = `group-${Date.now()}`
-    const splitGroupId = targetGroupId || sourceGroupId
+    const termTab = tabState.tabs[termIdx] as TerminalTab
+    if (termTab.type !== 'terminal') return
 
-    // Move tab to new group
-    tab.groupId = newGroupId
-    activeTabId.value = tabId
-    activeTabByGroup.value[newGroupId] = tabId
+    const newPanelId = termTab.panelId
 
-    // Update source group's active tab
-    const remaining = tabs.value.find(t => t.groupId === sourceGroupId)
-    if (remaining) {
-      activeTabByGroup.value[sourceGroupId] = remaining.id
+    // Remove terminal tab
+    tabState.tabs.splice(termIdx, 1)
+
+    // Add panel to workspace
+    wsTab.panelIds.push(newPanelId)
+    wsTab.layout = {
+      root: insertPanelIntoLayout(wsTab.layout.root, targetPanelId, newPanelId, direction, insertBefore)
     }
-
-    // Find leaf node with splitGroupId and replace with split node
-    function replace(node: SplitNode): boolean {
-      if (!node.direction && node.tabGroupId === splitGroupId) {
-        const existingLeaf = newNode({ tabGroupId: node.tabGroupId, ratio: 0.5 })
-        const newLeaf = newNode({ tabGroupId: newGroupId, ratio: 0.5 })
-
-        node.direction = direction
-        node.tabGroupId = undefined
-
-        // Edge determines child order: top/left = new pane first, bottom/right = existing first
-        if (edge === 'top' || edge === 'left') {
-          node.children = [newLeaf, existingLeaf]
-        } else {
-          node.children = [existingLeaf, newLeaf]
-        }
-        return true
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          if (replace(child)) return true
-        }
-      }
-      return false
-    }
-
-    replace(splitRoot.value)
-
-    // Clean up source group if now empty
-    if (!tabs.value.some(t => t.groupId === sourceGroupId)) {
-      delete activeTabByGroup.value[sourceGroupId]
-      removeEmptyGroup(splitRoot.value, sourceGroupId)
-    }
+    wsTab.activePanelId = newPanelId
+    tabState.activeTabId = workspaceTabId
   }
 
-  // ── Split tree: remove empty group ──
+  // ── Detach: panel from workspace ──
+  // Returns the detached panelId; caller is responsible for creating a terminal
+  // tab with the correct name. Handles workspace cleanup (auto-convert to
+  // terminal tab when 1 panel remains, close when empty).
 
-  function removeEmptyGroup(node: SplitNode, targetGroupId: string): boolean {
-    // Leaf: remove if matches the empty group
-    if (!node.direction) {
-      if (node.tabGroupId === targetGroupId && node.id !== 'root') {
-        return false // signal removal to parent
+  function removePanelFromWorkspaceTab(workspaceTabId: string, panelId: string): string | null {
+    const wsTab = tabState.tabs.find(t => t.id === workspaceTabId)
+    if (!wsTab || wsTab.type !== 'workspace') return null
+
+    const wsIdx = tabState.tabs.findIndex(t => t.id === workspaceTabId)
+
+    // Remove panel from workspace
+    wsTab.panelIds = wsTab.panelIds.filter(id => id !== panelId)
+    if (wsTab.activePanelId === panelId) {
+      wsTab.activePanelId = wsTab.panelIds[0] || null
+    }
+
+    // Clear AI lock if needed
+    if (tabState.aiLockedPanelId === panelId) {
+      tabState.aiLockedPanelId = null
+    }
+
+    if (wsTab.panelIds.length === 1) {
+      // Auto-convert remaining workspace to terminal tab
+      const panelStore = usePanelStore()
+      const remainingPanelId = wsTab.panelIds[0]
+      const remainingPanel = panelStore.getPanel(remainingPanelId)
+      const convertedTab: TerminalTab = {
+        type: 'terminal',
+        id: genId('term-tab'),
+        panelId: remainingPanelId,
+        name: remainingPanel?.title || 'Terminal'
       }
-      return true
+      tabState.tabs.splice(wsIdx, 1, convertedTab)
+      panelStore.movePanelToTab(remainingPanelId, convertedTab.id)
+      tabState.activeTabId = convertedTab.id
+    } else if (wsTab.panelIds.length === 0) {
+      tabState.tabs.splice(wsIdx, 1)
+    } else {
+      wsTab.layout = { root: removeFromLayout(wsTab.layout.root, panelId) }
     }
 
-    // Split node: filter children, collapse if needed
-    node.children = node.children.filter(child =>
-      removeEmptyGroup(child, targetGroupId)
-    )
-
-    // Collapse: if only one child remains, replace self with that child
-    if (node.children.length === 1) {
-      const only = node.children[0]
-      node.direction = only.direction
-      node.children = only.children
-      node.tabGroupId = only.tabGroupId
-    }
-
-    return node.children.length > 0 || node.tabGroupId !== undefined || node.id === 'root'
+    return panelId
   }
 
-  // ── Split tree: resize pane ──
+  // ── Workspace internal: move panel to new position ──
 
-  function resizePane(parentId: string, ratios: [number, number]) {
-    function walk(node: SplitNode) {
-      if (node.id === parentId && node.children.length === 2) {
-        const [r0, r1] = ratios
-        const clamped0 = Math.max(0.15, Math.min(0.85, r0))
-        node.children[0].ratio = clamped0
-        node.children[1].ratio = 1 - clamped0
-        return true
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          if (walk(child)) return true
-        }
-      }
-      return false
+  function movePanelInWorkspace(
+    workspaceTabId: string,
+    panelId: string,
+    targetPanelId: string,
+    direction: 'horizontal' | 'vertical',
+    insertBefore: boolean
+  ) {
+    const wsTab = tabState.tabs.find(t => t.id === workspaceTabId)
+    if (!wsTab || wsTab.type !== 'workspace' || panelId === targetPanelId) return
+
+    // Remove panel from old position
+    let tempLayout = { root: removeFromLayout(wsTab.layout.root, panelId) }
+    // Insert at new position
+    tempLayout = {
+      root: insertPanelIntoLayout(tempLayout.root, targetPanelId, panelId, direction, insertBefore)
     }
-    walk(splitRoot.value)
+    wsTab.layout = tempLayout
+    wsTab.panelIds = collectPanelIds(tempLayout.root)
+  }
+
+  // ── AI lock ──
+
+  function setAILockedPanel(panelId: string | null) {
+    tabState.aiLockedPanelId = panelId
+  }
+
+  function getAILockedPanel(): string | null {
+    return tabState.aiLockedPanelId
+  }
+
+  // ── Layout helpers ──
+
+  function collectPanelIds(node: LayoutNode): string[] {
+    if (node.type === 'leaf') return node.panelId ? [node.panelId] : []
+    return node.children.flatMap(collectPanelIds)
+  }
+
+  function hasPanelInNode(node: LayoutNode, panelId: string): boolean {
+    if (node.type === 'leaf') return node.panelId === panelId
+    return node.children.some(child => hasPanelInNode(child, panelId))
+  }
+
+  function insertPanelIntoLayout(
+    node: LayoutNode,
+    targetId: string,
+    newId: string,
+    direction: 'horizontal' | 'vertical',
+    before: boolean
+  ): LayoutNode {
+    if (node.type === 'leaf') {
+      if (node.panelId === targetId) {
+        const children = before
+          ? [{ type: 'leaf' as const, panelId: newId }, node]
+          : [node, { type: 'leaf' as const, panelId: newId }]
+        return { type: 'split', direction, sizes: [0.5, 0.5], children }
+      }
+      return node
+    }
+    const hasTarget = node.children.some(child => hasPanelInNode(child, targetId))
+    if (hasTarget) {
+      return {
+        ...node,
+        children: node.children.map(child =>
+          insertPanelIntoLayout(child, targetId, newId, direction, before)
+        )
+      }
+    }
+    return node
+  }
+
+  function removeFromLayout(node: LayoutNode, panelId: string): LayoutNode {
+    if (node.type === 'leaf') {
+      return node.panelId === panelId
+        ? { type: 'leaf' as const, panelId: '' }
+        : node
+    }
+    const newChildren = node.children
+      .map(child => removeFromLayout(child, panelId))
+      .filter(child => !(child.type === 'leaf' && child.panelId === ''))
+
+    if (newChildren.length === 0) {
+      return { type: 'leaf' as const, panelId: '' }
+    }
+    if (newChildren.length === 1) {
+      return newChildren[0]
+    }
+    return { ...node, children: newChildren }
+  }
+
+  function updateNodeInTree(
+    node: LayoutNode,
+    oldNode: LayoutNode,
+    newNode: LayoutNode
+  ): LayoutNode {
+    if (node === oldNode) return newNode
+    if (node.type === 'leaf') return node
+    return {
+      ...node,
+      children: node.children.map(child => updateNodeInTree(child, oldNode, newNode))
+    }
   }
 
   return {
     tabs,
     activeTabId,
-    activeTabByGroup,
-    activeTabForGroup,
     activeTab,
-    splitRoot,
-    draggingTabId,
-    addTab,
-    removeTab,
+    aiLockedPanelId,
+    createTerminalTab,
+    createSettingsTab,
+    createWorkspaceTab,
+    closeTab,
     setActiveTab,
-    updateTabTitle,
     moveTab,
-    createSplit,
-    resizePane,
-    toggleAILock,
-    getAILockedTab
+    renameTab,
+    setActivePanel,
+    updateWorkspaceLayout,
+    mergeToWorkspace,
+    addPanelToWorkspaceTab,
+    removePanelFromWorkspaceTab,
+    movePanelInWorkspace,
+    setAILockedPanel,
+    getAILockedPanel,
+    // Expose helpers for components
+    collectPanelIds,
+    insertPanelIntoLayout,
+    removeFromLayout,
+    updateNodeInTree
   }
 })

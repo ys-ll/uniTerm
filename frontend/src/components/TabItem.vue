@@ -1,32 +1,35 @@
 <template>
   <div
     class="tab-item"
-    :data-tab-id="tabId"
-    :class="{ active: isActive, foreground: isForeground, error: status === 'error', 'ai-locked': aiLocked }"
+    :class="{ active: isActive, 'ai-locked': isAILocked }"
+    @click="$emit('activate', tab.id)"
     draggable="true"
-    @click="$emit('activate')"
     @dragstart="onDragStart"
-    @dragend="$emit('dragend')"
     @contextmenu="onContextMenu"
   >
-    <span class="tab-title">{{ title }}</span>
+    <span v-if="!editing" class="tab-name" @dblclick.stop="startEdit">{{ tab.name }}</span>
+    <input
+      v-else
+      ref="editInputRef"
+      v-model="editName"
+      class="tab-name-input"
+      @keydown.enter="confirmEdit"
+      @keydown.escape="cancelEdit"
+      @blur="confirmEdit"
+      @click.stop
+    />
     <button
-      v-if="type === 'ssh'"
-      draggable="false"
-      class="tab-ai"
-      :class="{ locked: aiLocked }"
-      @click.stop="onToggleLock"
-      @mousedown.stop
-      :title="aiLocked ? 'AI已锁定到此终端' : '锁定AI到此终端'"
+      v-if="tab.type === 'terminal'"
+      class="tab-ai-lock"
+      :class="{ locked: isAILocked }"
+      @click.stop="$emit('toggleAiLock', tab.panelId)"
+      :title="isAILocked ? 'AI locked' : 'Lock AI'"
     >AI</button>
     <button
-      draggable="false"
+      v-if="isActive || showClose"
       class="tab-close"
-      @click.stop="$emit('close')"
-      @mousedown.stop
-    >
-      <el-icon><Close /></el-icon>
-    </button>
+      @click.stop="$emit('close', tab.id)"
+    >×</button>
 
     <Teleport to="body">
       <div
@@ -36,59 +39,63 @@
         :style="contextMenuStyle"
         @click.stop
       >
-        <div class="menu-item" @click="duplicate">{{ t('tab.duplicate') }}</div>
-        <div class="menu-divider" />
+        <div v-if="tab.type === 'terminal'" class="menu-item" @click="duplicateTab">{{ t('tab.duplicate') }}</div>
+        <div v-if="tab.type === 'terminal'" class="menu-item" @click="startEdit">{{ t('tab.rename') }}</div>
+        <div v-if="tab.type === 'terminal'" class="menu-divider" />
+        <div class="menu-item" @click="closeTab">{{ t('tab.close') }}</div>
+        <div class="menu-item" @click="closeOther">{{ t('tab.closeOther') }}</div>
         <div class="menu-item" @click="closeRight">{{ t('tab.closeRight') }}</div>
         <div class="menu-item" @click="closeLeft">{{ t('tab.closeLeft') }}</div>
-        <div class="menu-item" @click="closeOther">{{ t('tab.closeOther') }}</div>
-        <div class="menu-divider" />
-        <div class="menu-item" @click="closeTab">{{ t('tab.close') }}</div>
       </div>
     </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { Close } from '@element-plus/icons-vue'
-import { useI18n } from '../i18n'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useTabStore } from '../stores/tabStore'
-import type { SessionStatus } from '../types/session'
-
-const { t } = useI18n()
-const tabStore = useTabStore()
+import { usePanelStore } from '../stores/panelStore'
+import { useI18n } from '../i18n'
+import { CreateSession } from '../../wailsjs/go/main/App'
+import type { TerminalTab, SettingsTab } from '../types/workspace'
 
 const props = defineProps<{
-  title: string
+  tab: TerminalTab | SettingsTab
   isActive: boolean
-  isForeground: boolean
-  status: SessionStatus
-  tabId: string
-  type: 'ssh' | 'settings'
-  aiLocked: boolean
+  showClose?: boolean
 }>()
 
-const emit = defineEmits([
-  'activate',
-  'close',
-  'dragstart',
-  'dragend',
-  'split',
-  'duplicate',
-  'close-right',
-  'close-left',
-  'close-other'
-])
+const emit = defineEmits<{
+  activate: [id: string]
+  close: [id: string]
+  toggleAiLock: [panelId: string]
+}>()
+
+const tabStore = useTabStore()
+const panelStore = usePanelStore()
+const { t } = useI18n()
 
 const contextMenuVisible = ref(false)
 const contextMenuStyle = ref({ left: '0px', top: '0px' })
 
+const editing = ref(false)
+const editName = ref('')
+const editInputRef = ref<HTMLInputElement>()
+
+const isAILocked = computed(() => {
+  if (props.tab.type !== 'terminal') return false
+  return tabStore.aiLockedPanelId === props.tab.panelId
+})
+
 function onDragStart(e: DragEvent) {
-  if (e.dataTransfer) {
-    e.dataTransfer.setData('text/plain', props.tabId)
-    e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer?.setData('application/tab-id', props.tab.id)
+  if (props.tab.type === 'terminal') {
+    e.dataTransfer?.setData('application/tab-type', 'terminal')
   }
-  emit('dragstart', props.tabId)
+  if (props.isActive) {
+    e.dataTransfer?.setData('application/is-active-tab', '1')
+  }
+  e.dataTransfer!.effectAllowed = 'move'
 }
 
 function onContextMenu(e: MouseEvent) {
@@ -103,6 +110,74 @@ function closeContextMenu() {
   contextMenuVisible.value = false
 }
 
+function startEdit() {
+  closeContextMenu()
+  editName.value = props.tab.name
+  editing.value = true
+  nextTick(() => {
+    editInputRef.value?.focus()
+    editInputRef.value?.select()
+  })
+}
+
+function confirmEdit() {
+  if (!editing.value) return
+  editing.value = false
+  const newName = editName.value.trim()
+  if (newName && newName !== props.tab.name) {
+    tabStore.renameTab(props.tab.id, newName)
+  }
+}
+
+function cancelEdit() {
+  editing.value = false
+}
+
+function closeTab() {
+  emit('close', props.tab.id)
+  closeContextMenu()
+}
+
+function closeOther() {
+  const allTabs = tabStore.tabs
+  const currentIdx = allTabs.findIndex(t => t.id === props.tab.id)
+  const others = allTabs.filter((_, i) => i !== currentIdx)
+  others.forEach(t => emit('close', t.id))
+  closeContextMenu()
+}
+
+function closeRight() {
+  const allTabs = tabStore.tabs
+  const currentIdx = allTabs.findIndex(t => t.id === props.tab.id)
+  allTabs.slice(currentIdx + 1).forEach(t => emit('close', t.id))
+  closeContextMenu()
+}
+
+function closeLeft() {
+  const allTabs = tabStore.tabs
+  const currentIdx = allTabs.findIndex(t => t.id === props.tab.id)
+  allTabs.slice(0, currentIdx).forEach(t => emit('close', t.id))
+  closeContextMenu()
+}
+
+async function duplicateTab() {
+  const panel = panelStore.getPanel(props.tab.panelId)
+  if (!panel) return
+  const newPanel = panelStore.createPanel(panel.config, panel.type)
+  newPanel.title = panel.title
+  const newTab = tabStore.createTerminalTab(panel.title, newPanel.id)
+  panelStore.movePanelToTab(newPanel.id, newTab.id)
+  if (panel.config) {
+    try {
+      const info = await CreateSession(panel.config.type, panel.config)
+      panelStore.bindSession(newPanel.id, info.id)
+    } catch (e) {
+      console.error('Failed to duplicate session:', e)
+    }
+  }
+  closeContextMenu()
+}
+
 onMounted(() => {
   window.addEventListener('global:close-context-menus', closeContextMenu)
   document.addEventListener('click', closeContextMenu)
@@ -112,191 +187,76 @@ onUnmounted(() => {
   window.removeEventListener('global:close-context-menus', closeContextMenu)
   document.removeEventListener('click', closeContextMenu)
 })
-
-function duplicate() {
-  emit('duplicate')
-  closeContextMenu()
-}
-
-function closeRight() {
-  emit('close-right')
-  closeContextMenu()
-}
-
-function closeLeft() {
-  emit('close-left')
-  closeContextMenu()
-}
-
-function closeOther() {
-  emit('close-other')
-  closeContextMenu()
-}
-
-function closeTab() {
-  emit('close')
-  closeContextMenu()
-}
-
-function onToggleLock() {
-  tabStore.toggleAILock(props.tabId)
-}
 </script>
 
 <style scoped>
 .tab-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  height: 30px;
-  font-size: 11px;
-  font-family: var(--font-ui);
-  background: transparent;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  gap: 8px;
+  padding: 8px 16px;
   cursor: pointer;
   user-select: none;
-  min-width: 100px;
-  max-width: 180px;
-  color: var(--text-muted);
-  transition: all 0.12s ease;
+  border-bottom: 2px solid transparent;
   position: relative;
 }
-
-.tab-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
 .tab-item.active {
-  background: var(--bg-base);
-  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+  background: var(--bg-surface);
 }
-
-.tab-item.active::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 8px;
-  right: 8px;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 0 0 2px 2px;
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-
-.tab-item.error .tab-title {
-  color: var(--error);
-}
-
-.tab-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-  text-align: center;
-}
-
-.tab-close,
-.tab-ai {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 3px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  opacity: 0.45;
-  transition: all 0.1s ease;
-  box-sizing: border-box;
-  height: 16px;
-}
-
-.tab-close {
-  width: 16px;
-}
-
-.tab-close .el-icon {
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tab-item:hover .tab-close {
-  opacity: 1;
-  color: var(--text-primary);
-}
-
-.tab-close:hover {
-  background: var(--bg-active);
-  color: var(--error);
-}
-
-.tab-item.foreground .tab-close,
-.tab-item.active .tab-close {
-  opacity: 0.7;
-}
-
-.tab-item.active .tab-close:hover {
-  opacity: 1;
-}
-
 .tab-item.ai-locked {
   box-shadow: inset 3px 0 0 var(--warning, #f59e0b);
 }
-
-.tab-item.ai-locked .tab-ai {
-  opacity: 1;
-  color: var(--warning, #f59e0b);
+.tab-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-/* Foreground: visible in pane but not globally active */
-.tab-item.foreground {
-  background: var(--bg-surface);
-  color: var(--text-secondary);
+.tab-name-input {
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  width: 120px;
+  outline: none;
 }
-
-.tab-item.foreground::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 8px;
-  right: 8px;
-  height: 2px;
-  background: var(--border-subtle);
-  border-radius: 0 0 2px 2px;
-}
-
-.tab-ai {
-  min-width: 22px;
-  padding: 0 3px;
+.tab-ai-lock {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0;
 }
-
-.tab-item:hover .tab-ai {
+.tab-item:hover .tab-ai-lock,
+.tab-item.active .tab-ai-lock,
+.tab-ai-lock.locked {
   opacity: 1;
+}
+.tab-ai-lock:hover {
   color: var(--text-primary);
+  background: var(--bg-hover);
 }
-
-.tab-ai:hover {
-  background: var(--bg-active);
+.tab-ai-lock.locked {
+  color: var(--warning, #f59e0b);
 }
-
-.tab-item.foreground .tab-ai,
-.tab-item.active .tab-ai {
-  opacity: 0.7;
+.tab-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
 }
-
-.tab-item.foreground .tab-ai:hover,
-.tab-item.active .tab-ai:hover {
-  opacity: 1;
+.tab-close:hover {
+  color: var(--text-primary);
 }
 </style>
 
@@ -312,7 +272,6 @@ function onToggleLock() {
   padding: 4px;
   backdrop-filter: blur(8px);
 }
-
 .tab-context-menu .menu-item {
   padding: 7px 14px;
   font-size: 12px;
@@ -323,12 +282,10 @@ function onToggleLock() {
   border-radius: var(--radius-sm);
   transition: all 0.1s ease;
 }
-
 .tab-context-menu .menu-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-
 .tab-context-menu .menu-divider {
   height: 1px;
   background: var(--border-subtle);

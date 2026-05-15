@@ -2,9 +2,10 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { SessionWrite, SessionResize } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { EventsOn, BrowserOpenURL } from '../../wailsjs/runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSessionStore } from '../stores/sessionStore'
 
@@ -22,6 +23,7 @@ export interface UseTerminalReturn {
   getSelection: () => string
   clear: () => void
   focus: () => void
+  setRetryOnEnter: (value: boolean) => void
 }
 
 export function useTerminal(
@@ -38,6 +40,7 @@ export function useTerminal(
   let intersectionObserver: IntersectionObserver | null = null
   let unsubscribe: (() => void) | null = null
   let statusUnsubscribe: (() => void) | null = null
+  let onDocumentMouseUp: (() => void) | null = null
 
   let resizeTimer: ReturnType<typeof setTimeout> | null = null
   let isResizing = false
@@ -223,12 +226,6 @@ export function useTerminal(
     const newRows = Math.max(1, rows)
 
     if (terminal.cols !== newCols || terminal.rows !== newRows) {
-      try {
-        const core = (terminal as any)._core
-        core?._renderService?.clear()
-      } catch {
-        // internal API may not exist
-      }
       terminal.resize(newCols, newRows)
       SessionResize(sessionId, newCols, newRows).catch(() => {})
     }
@@ -248,6 +245,10 @@ export function useTerminal(
 
   function focus() {
     terminal?.focus()
+  }
+
+  function setRetryOnEnter(value: boolean) {
+    retryOnEnter = value
   }
 
   function onWindowResize() {
@@ -292,7 +293,39 @@ export function useTerminal(
 
     fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
+    // Register web links addon: underline http/https links, Ctrl+Click to open
+    let hoverEl: HTMLDivElement | null = null
+    const webLinksAddon = new WebLinksAddon(
+      (event, uri) => {
+        if (event.ctrlKey || event.metaKey) {
+          BrowserOpenURL(uri)
+        }
+      },
+      {
+        hover(event, _text, _location) {
+          if (!hoverEl) {
+            hoverEl = document.createElement('div')
+            hoverEl.className = 'xterm-link-tooltip'
+            terminal!.element!.appendChild(hoverEl)
+          }
+          const rect = terminal!.element!.getBoundingClientRect()
+          hoverEl.textContent = 'Ctrl + Click to open'
+          hoverEl.style.left = (event.clientX - rect.left + 12) + 'px'
+          hoverEl.style.top = (event.clientY - rect.top - 28) + 'px'
+          hoverEl.style.display = 'block'
+        },
+        leave() {
+          if (hoverEl) {
+            hoverEl.style.display = 'none'
+          }
+        }
+      }
+    )
+    terminal.loadAddon(webLinksAddon)
+
     terminal.open(terminalRef.value)
+    // Force synchronous layout so grid rows are sized before xterm measures
+    void terminalRef.value.offsetHeight
     fitAddon.fit()
 
     // Restore terminal content from session buffer after tab move/merge
@@ -322,15 +355,17 @@ export function useTerminal(
       }
     })
 
-    // Selection action: copy on mouse up
-    terminal.element?.addEventListener('mouseup', () => {
+    // Selection action: copy on mouse up (document-level so it works
+    // even when the mouse is released outside the terminal element)
+    onDocumentMouseUp = () => {
       if (settingsStore.settings.terminal.selectionAction === 'copy') {
         const text = terminal?.getSelection()
         if (text) {
           navigator.clipboard.writeText(text)
         }
       }
-    })
+    }
+    document.addEventListener('mouseup', onDocumentMouseUp)
 
     unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
       const sid = getSessionId()
@@ -391,7 +426,12 @@ export function useTerminal(
 
   // Watch sessionId changes to rebind session data
   watch(() => getSessionId(), (newId) => {
-    if (newId) {
+    if (newId && terminal) {
+      // Restore buffered session data that arrived before bindSession
+      const history = sessionStore.getData(newId)
+      if (history) {
+        terminal.write(history)
+      }
       // Retry resize multiple times with longer delays to ensure backend Connect is ready
       const delays = [200, 400, 600, 800, 1000, 1500, 2000]
       delays.forEach((delay) => {
@@ -416,6 +456,10 @@ export function useTerminal(
     terminal?.dispose()
     unsubscribe?.()
     statusUnsubscribe?.()
+    if (onDocumentMouseUp) {
+      document.removeEventListener('mouseup', onDocumentMouseUp)
+      onDocumentMouseUp = null
+    }
     window.removeEventListener('resize', onWindowResize)
     window.removeEventListener('split:resize-start', onSplitResizeStart)
     window.removeEventListener('split:resize-end', onSplitResizeEnd)
@@ -429,6 +473,7 @@ export function useTerminal(
     resize,
     getSelection,
     clear,
-    focus
+    focus,
+    setRetryOnEnter
   }
 }

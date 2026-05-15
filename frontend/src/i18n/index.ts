@@ -46,7 +46,8 @@ const messages: Record<Locale, Record<string, string>> = {
     'conn.hostRequired': '主机地址不能为空',
 
     // TabItem
-    'tab.duplicate': '复制',
+    'tab.duplicate': '复制标签',
+    'tab.rename': '重命名',
     'tab.closeRight': '关闭右侧标签',
     'tab.closeLeft': '关闭左侧标签',
     'tab.closeOther': '关闭其他标签',
@@ -187,6 +188,7 @@ const messages: Record<Locale, Record<string, string>> = {
 
     // TabItem
     'tab.duplicate': 'Duplicate',
+    'tab.rename': 'Rename',
     'tab.closeRight': 'Close Tabs to the Right',
     'tab.closeLeft': 'Close Tabs to the Left',
     'tab.closeOther': 'Close Other Tabs',

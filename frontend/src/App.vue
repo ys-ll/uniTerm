@@ -9,11 +9,22 @@
     <div class="main-content">
       <Sidebar :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" />
       <div class="tab-area">
-        <WorkspaceTabs />
-        <Workspace
-          v-if="workspaceStore.activeWorkspace"
-          :workspace="workspaceStore.activeWorkspace"
-        />
+        <TabBar />
+        <template v-if="activeTab">
+          <TerminalTabContent
+            v-if="activeTab.type === 'terminal'"
+            :key="activeTab.id"
+            :tab="activeTab"
+            @close="closeTab"
+          />
+          <SettingsTabContent
+            v-else-if="activeTab.type === 'settings'"
+          />
+          <WorkspaceContent
+            v-else-if="activeTab.type === 'workspace'"
+            :tab="activeTab"
+          />
+        </template>
       </div>
       <AISidebar />
     </div>
@@ -35,15 +46,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import Sidebar from './components/Sidebar.vue'
-import Workspace from './components/Workspace.vue'
+import TabBar from './components/TabBar.vue'
+import TerminalTabContent from './components/TerminalTabContent.vue'
+import SettingsTabContent from './components/SettingsTabContent.vue'
+import WorkspaceContent from './components/WorkspaceContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
-import WorkspaceTabs from './components/WorkspaceTabs.vue'
 import { useConnectionStore } from './stores/connectionStore'
-import { useWorkspaceStore } from './stores/workspaceStore'
+import { useTabStore } from './stores/tabStore'
 import { usePanelStore } from './stores/panelStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useAIStore } from './stores/aiStore'
@@ -53,7 +66,8 @@ import { CreateSession } from '../wailsjs/go/main/App'
 import type { ConnectionConfig } from './types/session'
 
 const connectionStore = useConnectionStore()
-const workspaceStore = useWorkspaceStore()
+const tabStore = useTabStore()
+const activeTab = computed(() => tabStore.activeTab)
 const panelStore = usePanelStore()
 const sessionStore = useSessionStore()
 const aiStore = useAIStore()
@@ -135,6 +149,12 @@ function setInputSelection(el: HTMLInputElement | HTMLTextAreaElement, text: str
   el.focus()
 }
 
+function onWheel(e: WheelEvent) {
+  if (e.ctrlKey) {
+    e.preventDefault()
+  }
+}
+
 onMounted(() => {
   connectionStore.load()
   aiStore.initConfig()
@@ -142,27 +162,33 @@ onMounted(() => {
   window.addEventListener('input:contextmenu', onInputContextMenu)
   window.addEventListener('global:close-context-menus', closeInputMenu)
   document.addEventListener('click', closeInputMenu)
+  document.addEventListener('wheel', onWheel, { passive: false })
 })
 
 onUnmounted(() => {
   window.removeEventListener('input:contextmenu', onInputContextMenu)
   window.removeEventListener('global:close-context-menus', closeInputMenu)
   document.removeEventListener('click', closeInputMenu)
+  document.removeEventListener('wheel', onWheel)
 })
 
 function openSettings() {
-  const existing = Array.from(panelStore.panels.values()).find(p => p.type === 'settings')
-  if (existing) {
-    const ws = workspaceStore.workspaces.find(w => w.panelIds.includes(existing.id))
-    if (ws) {
-      workspaceStore.setActiveWorkspace(ws.id)
-    }
+  // Check if settings tab already exists
+  const existingTab = tabStore.tabs.find(t => t.type === 'settings')
+  if (existingTab) {
+    tabStore.setActiveTab(existingTab.id)
     return
   }
+
   const panel = panelStore.createPanel(null, 'settings')
   panel.title = t('settings.title')
-  const workspace = workspaceStore.createWorkspace(t('settings.title'), panel.id)
-  panelStore.movePanelToWorkspace(panel.id, workspace.id)
+  const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+}
+
+function closeTab(tabId: string) {
+  const panelIds = tabStore.closeTab(tabId)
+  panelIds.forEach(pid => panelStore.removePanel(pid))
 }
 
 function onSaveOnly(config: ConnectionConfig) {
@@ -176,8 +202,8 @@ async function onConnect(config: ConnectionConfig) {
     ? `${config.name} (${config.host})`
     : `${config.user}@${config.host}`
   panel.title = displayTitle
-  const workspace = workspaceStore.createWorkspace(displayTitle, panel.id)
-  panelStore.movePanelToWorkspace(panel.id, workspace.id)
+  const tab = tabStore.createTerminalTab(displayTitle, panel.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
 
   try {
     const info = await CreateSession(config.type, config)
@@ -185,7 +211,7 @@ async function onConnect(config: ConnectionConfig) {
     sessionStore.initSession(info.id)
   } catch (e) {
     console.error('Failed to create session:', e)
-    workspaceStore.closeWorkspace(workspace.id)
+    tabStore.closeTab(tab.id)
     panelStore.removePanel(panel.id)
   }
 }

@@ -1,19 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Core palette - industrial dark */
-  --bg-base: #121214;
-  --bg-elevated: #18181b;
-  --bg-surface: #1e1e22;
-  --bg-overlay: #27272a;
-  --bg-hover: #2a2a2e;
-  --bg-active: #323236;
+  /* Core palette - professional dark */
+  --bg-base: #14171d;
+  --bg-elevated: #191c24;
+  --bg-surface: #1f222b;
+  --bg-overlay: #252933;
+  --bg-hover: #2b2f3b;
+  --bg-active: #333845;
 
   /* Text */
-  --text-primary: #e8e8ec;
-  --text-secondary: #a4a4ac;
-  --text-muted: #6e6e78;
-  --text-disabled: #4a4a52;
+  --text-primary: #e6e8ed;
+  --text-secondary: #9ea3ae;
+  --text-muted: #737984;
+  --text-disabled: #525760;
 
   /* Accent - electric cyan */
   --accent: #22d3ee;
@@ -24,12 +24,12 @@
   /* Semantic */
   --success: #34d399;
   --success-dim: #059669;
-  --warning: #fbbf24;
+  --warning: #f59e0b;
   --error: #f87171;
 
   /* Borders */
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-hover: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.14);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -46,34 +46,34 @@
   --radius-lg: 12px;
 
   /* Element Plus theme overrides */
-  --el-bg-color: #121214;
-  --el-bg-color-page: #121214;
-  --el-fill-color-blank: #1e1e22;
-  --el-fill-color: #18181b;
-  --el-fill-color-light: #27272a;
-  --el-fill-color-lighter: #2a2a2e;
-  --el-text-color-primary: #e8e8ec;
-  --el-text-color-regular: #a4a4ac;
-  --el-text-color-secondary: #6e6e78;
-  --el-text-color-placeholder: #4a4a52;
-  --el-border-color: rgba(255, 255, 255, 0.08);
-  --el-border-color-light: rgba(255, 255, 255, 0.06);
-  --el-border-color-lighter: rgba(255, 255, 255, 0.04);
+  --el-bg-color: #14171d;
+  --el-bg-color-page: #14171d;
+  --el-fill-color-blank: #1f222b;
+  --el-fill-color: #191c24;
+  --el-fill-color-light: #252933;
+  --el-fill-color-lighter: #2b2f3b;
+  --el-text-color-primary: #e6e8ed;
+  --el-text-color-regular: #9ea3ae;
+  --el-text-color-secondary: #737984;
+  --el-text-color-placeholder: #525760;
+  --el-border-color: rgba(255, 255, 255, 0.14);
+  --el-border-color-light: rgba(255, 255, 255, 0.1);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.08);
 }
 
 /* Deep blue - oceanic dark */
 [data-theme="deep-blue"] {
-  --bg-base: #060b14;
-  --bg-elevated: #0b1120;
-  --bg-surface: #0f1629;
-  --bg-overlay: #141c32;
-  --bg-hover: #18223e;
-  --bg-active: #1e2a4a;
+  --bg-base: #0b111e;
+  --bg-elevated: #101729;
+  --bg-surface: #161d33;
+  --bg-overlay: #1c253d;
+  --bg-hover: #232d48;
+  --bg-active: #2b3653;
 
   --text-primary: #e2e8f4;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-disabled: #475569;
+  --text-muted: #6b7590;
+  --text-disabled: #4a5468;
 
   --accent: #38bdf8;
   --accent-dim: #0284c7;
@@ -82,29 +82,29 @@
 
   --success: #34d399;
   --success-dim: #059669;
-  --warning: #fbbf24;
+  --warning: #f59e0b;
   --error: #f87171;
 
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --border-hover: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.14);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
 
-  --el-bg-color: #060b14;
-  --el-bg-color-page: #060b14;
-  --el-fill-color-blank: #0f1629;
-  --el-fill-color: #0b1120;
-  --el-fill-color-light: #141c32;
-  --el-fill-color-lighter: #18223e;
+  --el-bg-color: #0b111e;
+  --el-bg-color-page: #0b111e;
+  --el-fill-color-blank: #161d33;
+  --el-fill-color: #101729;
+  --el-fill-color-light: #1c253d;
+  --el-fill-color-lighter: #232d48;
   --el-text-color-primary: #e2e8f4;
   --el-text-color-regular: #94a3b8;
-  --el-text-color-secondary: #64748b;
-  --el-text-color-placeholder: #475569;
-  --el-border-color: rgba(255, 255, 255, 0.1);
-  --el-border-color-light: rgba(255, 255, 255, 0.07);
-  --el-border-color-lighter: rgba(255, 255, 255, 0.05);
+  --el-text-color-secondary: #6b7590;
+  --el-text-color-placeholder: #4a5468;
+  --el-border-color: rgba(255, 255, 255, 0.14);
+  --el-border-color-light: rgba(255, 255, 255, 0.1);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] {
@@ -383,4 +383,26 @@ body.drag-active .zone {
   width: 100% !important;
   height: 100% !important;
   display: block !important;
+}
+
+/* URL links always underlined */
+.xterm-link {
+  text-decoration: underline !important;
+  cursor: pointer !important;
+}
+
+/* Link hover tooltip */
+.xterm-link-tooltip {
+  position: absolute;
+  z-index: 100;
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-hover);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  white-space: nowrap;
 }

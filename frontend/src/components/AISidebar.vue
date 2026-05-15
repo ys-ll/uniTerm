@@ -131,7 +131,7 @@ import { ref, nextTick, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Setting, Close, ArrowDown, Plus, Delete } from '@element-plus/icons-vue'
 import { useAIStore } from '../stores/aiStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useWorkspaceStore } from '../stores/workspaceStore'
+import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { runAgent, approveTool, rejectTool, continueAgent } from '../services/agent'
@@ -140,7 +140,7 @@ import AIMessage from './AIMessage.vue'
 
 const aiStore = useAIStore()
 const settingsStore = useSettingsStore()
-const workspaceStore = useWorkspaceStore()
+const tabStore = useTabStore()
 const panelStore = usePanelStore()
 const { t } = useI18n()
 const input = ref('')
@@ -339,18 +339,15 @@ async function onContinue() {
 
 function openGlobalSettings() {
   settingsStore.openCategory = 'ai'
-  const existing = Array.from(panelStore.panels.values()).find(p => p.type === 'settings')
-  if (existing) {
-    const ws = workspaceStore.workspaces.find(w => w.panelIds.includes(existing.id))
-    if (ws) {
-      workspaceStore.setActiveWorkspace(ws.id)
-    }
+  const existingTab = tabStore.tabs.find(t => t.type === 'settings')
+  if (existingTab) {
+    tabStore.setActiveTab(existingTab.id)
     return
   }
   const panel = panelStore.createPanel(null, 'settings')
   panel.title = t('settings.title')
-  const workspace = workspaceStore.createWorkspace(t('settings.title'), panel.id)
-  panelStore.movePanelToWorkspace(panel.id, workspace.id)
+  const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
 }
 
 function onResizeStart(e: MouseEvent) {
@@ -366,8 +363,7 @@ function onResizeStart(e: MouseEvent) {
     if (!isResizing.value) return
     const delta = startX - ev.clientX
     const newWidth = Math.min(Math.max(startWidth + delta, 240), 800)
-    sidebarWidth.value = newWidth
-    el.style.width = newWidth + 'px'
+    if (el) el.style.width = newWidth + 'px'
   }
 
   function onMouseUp() {
