@@ -53,3 +53,11 @@ export function SessionResize(arg1, arg2, arg3) {
 export function SessionWrite(arg1, arg2) {
   return window['go']['main']['App']['SessionWrite'](arg1, arg2);
 }
+
+export function OpenFileDialog() {
+  return window['go']['main']['App']['OpenFileDialog']();
+}
+
+export function SaveFileDialog(arg1) {
+  return window['go']['main']['App']['SaveFileDialog'](arg1);
+}

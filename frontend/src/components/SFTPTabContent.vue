@@ -81,18 +81,15 @@ const localFiles = ref<FileItem[]>([])
 const remoteFiles = ref<FileItem[]>([])
 const transferTasks = ref<TransferTaskUI[]>([])
 
-let unsubscribeFileList: (() => void) | null = null
-let unsubscribeLocalList: (() => void) | null = null
-let unsubscribeTransfer: (() => void) | null = null
+let unsubscribe: (() => void) | null = null
 
 onMounted(() => {
-  // Initial load
   onRefreshLocal()
   onRefreshRemote()
 
-  unsubscribeFileList = EventsOn('session:data', (payload: { id: string; data: string }) => {
+  unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
     if (payload.id !== panel.value?.sessionId) return
-    const match = payload.data.match(/\x1b\]633;S(.+)\x07/)
+    const match = payload.data.match(/\x1b\]633;S([^\x07]*)\x07/)
     if (!match) return
     try {
       const msg = JSON.parse(match[1])
@@ -105,17 +102,7 @@ onMounted(() => {
           isDir: f.isDir
         }))
         if (msg.cwd) cwd.value = msg.cwd
-      }
-    } catch {}
-  })
-
-  unsubscribeLocalList = EventsOn('session:data', (payload: { id: string; data: string }) => {
-    if (payload.id !== panel.value?.sessionId) return
-    const match = payload.data.match(/\x1b\]633;S(.+)\x07/)
-    if (!match) return
-    try {
-      const msg = JSON.parse(match[1])
-      if (msg.type === 'sftp:locallist') {
+      } else if (msg.type === 'sftp:locallist') {
         localFiles.value = msg.files.map((f: any) => ({
           name: f.name,
           size: f.size,
@@ -124,27 +111,17 @@ onMounted(() => {
           isDir: f.isDir
         }))
         if (msg.localCwd) localCwd.value = msg.localCwd
-      }
-    } catch {}
-  })
-
-  unsubscribeTransfer = EventsOn('session:data', (payload: { id: string; data: string }) => {
-    if (payload.id !== panel.value?.sessionId) return
-    const match = payload.data.match(/\x1b\]633;S(.+)\x07/)
-    if (!match) return
-    try {
-      const msg = JSON.parse(match[1])
-      if (msg.type === 'sftp:transfer') {
-        const existing = transferTasks.value.find(t => t.id === msg.taskId)
+      } else if (msg.type === 'sftp:transfer') {
         if (msg.event === 'progress') {
+          const existing = transferTasks.value.find(t => t.id === msg.taskId)
           if (existing) {
             existing.percentage = msg.total > 0 ? Math.round((msg.progress / msg.total) * 100) : 0
           }
         } else if (msg.event === 'complete') {
+          const existing = transferTasks.value.find(t => t.id === msg.taskId)
           if (existing) {
             existing.status = msg.status === 'done' ? 'done' : 'error'
             existing.percentage = msg.status === 'done' ? 100 : existing.percentage
-            // Remove completed tasks after a delay
             setTimeout(() => {
               transferTasks.value = transferTasks.value.filter(t => t.id !== msg.taskId)
             }, 3000)
@@ -156,9 +133,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  unsubscribeFileList?.()
-  unsubscribeLocalList?.()
-  unsubscribeTransfer?.()
+  unsubscribe?.()
 })
 
 function sendCommand(cmd: string) {

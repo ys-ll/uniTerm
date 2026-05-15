@@ -28,3 +28,7 @@ export function SaveSettings(arg1:store.AppSettings):Promise<void>;
 export function SessionResize(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function SessionWrite(arg1:string,arg2:string):Promise<void>;
+
+export function OpenFileDialog():Promise<string>;
+
+export function SaveFileDialog(arg1:string):Promise<string>;
