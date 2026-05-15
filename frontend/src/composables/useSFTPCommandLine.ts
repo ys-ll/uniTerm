@@ -54,7 +54,11 @@ export function useSFTPCommandLine(
     unsubscribe = EventsOn('session:data', (payload: { id: string; data: string }) => {
       const sid = getSessionId()
       if (payload.id === sid && terminal) {
-        terminal.write(payload.data)
+        // Filter out OSC 633 sequences (SFTP structured data)
+        const cleaned = payload.data.replace(/\x1b\]633;S[^\x07]*\x07/g, '')
+        if (cleaned) {
+          terminal.write(cleaned)
+        }
       }
     })
 

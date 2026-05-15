@@ -62,6 +62,7 @@
         @click.stop
       >
         <div class="menu-item" @click="doConnect">{{ t('sidebar.connect') }}</div>
+        <div class="menu-item" @click="doConnectSFTP">Connect SFTP</div>
         <div class="menu-divider" />
         <div class="menu-item" @click="doEdit">{{ t('sidebar.edit') }}</div>
         <div class="menu-item" @click="doDuplicate">{{ t('sidebar.duplicate') }}</div>
@@ -83,7 +84,7 @@ import type { ConnectionConfig } from '../types/session'
 const props = defineProps<{
   visible: boolean
 }>()
-const emit = defineEmits(['connect', 'toggle'])
+const emit = defineEmits(['connect', 'connectSftp', 'toggle'])
 const connectionStore = useConnectionStore()
 const { t } = useI18n()
 const showForm = ref(false)
@@ -209,6 +210,13 @@ function closeMenu() {
 function doConnect() {
   if (selectedConn.value) {
     emit('connect', selectedConn.value)
+  }
+  closeMenu()
+}
+
+function doConnectSFTP() {
+  if (selectedConn.value) {
+    emit('connectSftp', selectedConn.value)
   }
   closeMenu()
 }

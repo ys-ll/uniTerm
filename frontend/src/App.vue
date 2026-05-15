@@ -7,7 +7,7 @@
       @open-settings="openSettings"
     />
     <div class="main-content">
-      <Sidebar :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" />
+      <Sidebar :visible="sidebarVisible" @toggle="sidebarVisible = !sidebarVisible" @connect="onConnect" @connect-sftp="onConnectSftp" />
       <div class="tab-area">
         <TabBar />
         <template v-if="activeTab">
@@ -23,6 +23,10 @@
           <WorkspaceContent
             v-else-if="activeTab.type === 'workspace'"
             :tab="activeTab"
+          />
+          <SFTPTabContent
+            v-else-if="activeTab.type === 'sftp'"
+            :panel-id="activeTab.panelId"
           />
         </template>
       </div>
@@ -53,6 +57,7 @@ import TabBar from './components/TabBar.vue'
 import TerminalTabContent from './components/TerminalTabContent.vue'
 import SettingsTabContent from './components/SettingsTabContent.vue'
 import WorkspaceContent from './components/WorkspaceContent.vue'
+import SFTPTabContent from './components/SFTPTabContent.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
 import AISidebar from './components/AISidebar.vue'
 import { useConnectionStore } from './stores/connectionStore'
@@ -211,6 +216,25 @@ async function onConnect(config: ConnectionConfig) {
     sessionStore.initSession(info.id)
   } catch (e) {
     console.error('Failed to create session:', e)
+    tabStore.closeTab(tab.id)
+    panelStore.removePanel(panel.id)
+  }
+}
+
+async function onConnectSftp(config: ConnectionConfig) {
+  const panel = panelStore.createPanel(config, 'sftp')
+  const displayTitle = config.name
+    ? `${config.name} (SFTP)`
+    : `${config.user}@${config.host} (SFTP)`
+  panel.title = displayTitle
+  const tab = tabStore.createSFPTab(displayTitle, panel.id)
+  panelStore.movePanelToTab(panel.id, tab.id)
+
+  try {
+    const info = await CreateSession('sftp', config)
+    panelStore.bindSession(panel.id, info.id)
+  } catch (e) {
+    console.error('Failed to create SFTP session:', e)
     tabStore.closeTab(tab.id)
     panelStore.removePanel(panel.id)
   }
