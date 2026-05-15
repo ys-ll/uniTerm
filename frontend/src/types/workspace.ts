@@ -1,4 +1,4 @@
-export type PanelType = 'ssh' | 'settings' | 'other'
+export type PanelType = 'ssh' | 'sftp' | 'settings' | 'other'
 export type PanelStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 export interface ConnectionConfig {
@@ -33,7 +33,7 @@ export type LayoutNode =
 
 // ── Tab types ──
 
-export type Tab = TerminalTab | SettingsTab | WorkspaceTab
+export type Tab = TerminalTab | SettingsTab | WorkspaceTab | SFTPTab
 
 export interface TerminalTab {
   type: 'terminal'
@@ -56,4 +56,11 @@ export interface WorkspaceTab {
   panelIds: string[]
   layout: PanelLayout
   activePanelId: string | null
+}
+
+export interface SFTPTab {
+  type: 'sftp'
+  id: string
+  panelId: string
+  name: string
 }

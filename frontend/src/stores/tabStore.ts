@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { reactive, computed } from 'vue'
-import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, PanelLayout, LayoutNode } from '../types/workspace'
+import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, SFTPTab, PanelLayout, LayoutNode } from '../types/workspace'
 import { usePanelStore } from './panelStore'
 
 const tabState = reactive<{
@@ -53,6 +53,18 @@ export const useTabStore = defineStore('tab', () => {
     const tab: SettingsTab = {
       type: 'settings',
       id: genId('settings-tab'),
+      panelId,
+      name
+    }
+    tabState.tabs.push(tab)
+    tabState.activeTabId = tab.id
+    return tab
+  }
+
+  function createSFPTab(name: string, panelId: string): SFTPTab {
+    const tab: SFTPTab = {
+      type: 'sftp',
+      id: genId('sftp-tab'),
       panelId,
       name
     }
@@ -388,6 +400,7 @@ export const useTabStore = defineStore('tab', () => {
     aiLockedPanelId,
     createTerminalTab,
     createSettingsTab,
+    createSFPTab,
     createWorkspaceTab,
     closeTab,
     setActiveTab,
