@@ -57,10 +57,10 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useI18n } from '../i18n'
 import { CreateSession } from '../../wailsjs/go/main/App'
-import type { TerminalTab, SettingsTab } from '../types/workspace'
+import type { TerminalTab, SettingsTab, SFTPTab } from '../types/workspace'
 
 const props = defineProps<{
-  tab: TerminalTab | SettingsTab
+  tab: TerminalTab | SettingsTab | SFTPTab
   isActive: boolean
   showClose?: boolean
 }>()
@@ -91,6 +91,9 @@ function onDragStart(e: DragEvent) {
   e.dataTransfer?.setData('application/tab-id', props.tab.id)
   if (props.tab.type === 'terminal') {
     e.dataTransfer?.setData('application/tab-type', 'terminal')
+  }
+  if (props.tab.type === 'sftp') {
+    e.dataTransfer?.setData('application/tab-type', 'sftp')
   }
   if (props.isActive) {
     e.dataTransfer?.setData('application/is-active-tab', '1')

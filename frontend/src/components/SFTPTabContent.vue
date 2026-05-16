@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { usePanelStore } from '../stores/panelStore'
 import { SessionWrite } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime'
@@ -130,6 +130,17 @@ onMounted(() => {
       }
     } catch {}
   })
+})
+
+// Watch for sessionId becoming available (async connection)
+watch(() => panel.value?.sessionId, (newId, oldId) => {
+  if (newId && !oldId) {
+    // Session just connected — auto refresh file lists
+    setTimeout(() => {
+      onRefreshLocal()
+      onRefreshRemote()
+    }, 300)
+  }
 })
 
 onUnmounted(() => {
