@@ -34,12 +34,20 @@ export function OnConnectionsChanged(arg1) {
   return window['go']['main']['App']['OnConnectionsChanged'](arg1);
 }
 
+export function OpenFileDialog() {
+  return window['go']['main']['App']['OpenFileDialog']();
+}
+
 export function SaveAIConfig(arg1) {
   return window['go']['main']['App']['SaveAIConfig'](arg1);
 }
 
 export function SaveConnections(arg1) {
   return window['go']['main']['App']['SaveConnections'](arg1);
+}
+
+export function SaveFileDialog(arg1) {
+  return window['go']['main']['App']['SaveFileDialog'](arg1);
 }
 
 export function SaveSettings(arg1) {
@@ -52,12 +60,4 @@ export function SessionResize(arg1, arg2, arg3) {
 
 export function SessionWrite(arg1, arg2) {
   return window['go']['main']['App']['SessionWrite'](arg1, arg2);
-}
-
-export function OpenFileDialog() {
-  return window['go']['main']['App']['OpenFileDialog']();
-}
-
-export function SaveFileDialog(arg1) {
-  return window['go']['main']['App']['SaveFileDialog'](arg1);
 }

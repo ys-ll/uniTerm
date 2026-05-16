@@ -19,16 +19,16 @@ export function LoadSettings():Promise<store.AppSettings>;
 
 export function OnConnectionsChanged(arg1:any):Promise<void>;
 
+export function OpenFileDialog():Promise<string>;
+
 export function SaveAIConfig(arg1:store.AIConfig):Promise<void>;
 
 export function SaveConnections(arg1:Array<session.ConnectionConfig>):Promise<void>;
+
+export function SaveFileDialog(arg1:string):Promise<string>;
 
 export function SaveSettings(arg1:store.AppSettings):Promise<void>;
 
 export function SessionResize(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function SessionWrite(arg1:string,arg2:string):Promise<void>;
-
-export function OpenFileDialog():Promise<string>;
-
-export function SaveFileDialog(arg1:string):Promise<string>;

@@ -62,7 +62,7 @@
         @click.stop
       >
         <div class="menu-item" @click="doConnect">{{ t('sidebar.connect') }}</div>
-        <div class="menu-item" @click="doConnectSFTP">Connect SFTP</div>
+        <div class="menu-item" @click="doConnectSFTP">{{ t('sidebar.connectSftp') }}</div>
         <div class="menu-divider" />
         <div class="menu-item" @click="doEdit">{{ t('sidebar.edit') }}</div>
         <div class="menu-item" @click="doDuplicate">{{ t('sidebar.duplicate') }}</div>
