@@ -87,13 +87,6 @@ function buildSystemPrompt(): string {
   if (activePanel.type === 'ssh' && activePanel.config) {
     parts.push(`Connected to: ${activePanel.config.user}@${activePanel.config.host}:${activePanel.config.port}`)
   }
-  if (activePanel.type === 'sftp') {
-    parts.push('This is an SFTP command line session.')
-    parts.push('Available commands: ls, cd, pwd, get, put, mkdir, rm, rmdir, mv, chmod, lls, lcd, lpwd, help')
-    parts.push('Current remote path: /')
-    parts.push('Current local path: .')
-  }
-
   return base + '\n\n--- Current Context ---\n' + parts.join('\n') + '\n---'
 }
 

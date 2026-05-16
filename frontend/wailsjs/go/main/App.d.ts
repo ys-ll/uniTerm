@@ -9,6 +9,8 @@ export function CloseSession(arg1:string):Promise<void>;
 
 export function CreateSession(arg1:string,arg2:session.ConnectionConfig):Promise<session.SessionInfo>;
 
+export function GetDesktopPath():Promise<string>;
+
 export function ListSessions():Promise<Array<session.SessionInfo>>;
 
 export function LoadAIConfig():Promise<store.AIConfig>;
@@ -19,7 +21,13 @@ export function LoadSettings():Promise<store.AppSettings>;
 
 export function OnConnectionsChanged(arg1:any):Promise<void>;
 
+export function OpenDirectoryDialog():Promise<string>;
+
 export function OpenFileDialog():Promise<string>;
+
+export function OpenMultipleFilesDialog():Promise<Array<string>>;
+
+export function RemoveTempFile(arg1:string):Promise<void>;
 
 export function SaveAIConfig(arg1:store.AIConfig):Promise<void>;
 
@@ -32,3 +40,41 @@ export function SaveSettings(arg1:store.AppSettings):Promise<void>;
 export function SessionResize(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function SessionWrite(arg1:string,arg2:string):Promise<void>;
+
+export function SftpCancelTransfer(arg1:string,arg2:string):Promise<void>;
+
+export function SftpChangeLocalDir(arg1:string,arg2:string):Promise<session.FileListResult>;
+
+export function SftpChangeRemoteDir(arg1:string,arg2:string):Promise<session.FileListResult>;
+
+export function SftpChmod(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SftpGet(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<string>;
+
+export function SftpListLocal(arg1:string,arg2:string):Promise<session.FileListResult>;
+
+export function SftpListLocalDrives(arg1:string):Promise<Array<session.FileItem>>;
+
+export function SftpListRemote(arg1:string,arg2:string):Promise<session.FileListResult>;
+
+export function SftpLocalMkdir(arg1:string,arg2:string):Promise<void>;
+
+export function SftpLocalRemove(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function SftpLocalRename(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SftpMakeDir(arg1:string,arg2:string):Promise<void>;
+
+export function SftpPauseTransfer(arg1:string,arg2:string):Promise<void>;
+
+export function SftpPut(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<string>;
+
+export function SftpPutContent(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SftpRemove(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function SftpRename(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SftpResumeTransfer(arg1:string,arg2:string):Promise<void>;
+
+export function WriteTempFile(arg1:string,arg2:string):Promise<string>;

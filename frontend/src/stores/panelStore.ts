@@ -2,10 +2,25 @@ import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import type { Panel, PanelStatus, ConnectionConfig } from '../types/workspace'
 
+export interface TransferTaskUI {
+  id: string
+  type: 'upload' | 'download'
+  name: string
+  percentage: number
+  speed: string
+  eta: string
+  status: 'running' | 'paused' | 'done' | 'error' | 'cancelled'
+  lastBytes: number
+  lastTime: number
+  total: number
+}
+
 const panelState = reactive<{
   panels: Map<string, Panel>
+  transferTasks: Map<string, TransferTaskUI[]>
 }>({
-  panels: new Map()
+  panels: new Map(),
+  transferTasks: new Map()
 })
 
 export const usePanelStore = defineStore('panel', () => {
@@ -52,8 +67,17 @@ export const usePanelStore = defineStore('panel', () => {
     if (p) p.tabId = tabId
   }
 
+  function getTransferTasks(panelId: string): TransferTaskUI[] {
+    if (!panelState.transferTasks.has(panelId)) {
+      panelState.transferTasks.set(panelId, [])
+    }
+    return panelState.transferTasks.get(panelId)!
+  }
+
   return {
     panels: panelState.panels,
+    transferTasks: panelState.transferTasks,
+    getTransferTasks,
     createPanel,
     removePanel,
     getPanel,

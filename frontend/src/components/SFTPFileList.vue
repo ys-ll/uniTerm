@@ -3,45 +3,65 @@
     <div class="filter-bar">
       <el-input
         v-model="filterText"
-        placeholder="Filter by name"
+        :placeholder="t('sftp.filterByName')"
         size="small"
         clearable
       />
+      <el-button size="small" @click="emit('refresh')" :title="t('sftp.refresh')">
+        <el-icon><Refresh /></el-icon>
+      </el-button>
+      <el-button size="small" @click="showHidden = !showHidden" :type="showHidden ? 'primary' : undefined" :title="showHidden ? t('sftp.hideHidden') : t('sftp.showHidden')">
+        <el-icon><View /></el-icon>
+      </el-button>
+      <el-button size="small" @click="emit('mkdir')" :title="t('sftp.newDirectory')">
+        <el-icon><FolderAdd /></el-icon>
+      </el-button>
+      <el-button v-if="mode === 'remote'" size="small" type="primary" @click="emit('upload')" :title="t('sftp.upload')">
+        <el-icon><Upload /></el-icon>
+      </el-button>
     </div>
-    <el-table
-      ref="tableRef"
-      :data="filteredFiles"
-      size="small"
-      @row-click="onRowClick"
-      @row-dblclick="onRowDblClick"
-      @row-contextmenu="onRowContextMenu"
-    >
-      <el-table-column label="Name" min-width="160">
+    <div class="table-wrapper">
+      <div v-if="loading" class="loading-overlay">
+        <div class="loading-content">
+          <div class="loading-spinner"></div>
+          <span class="loading-text">{{ t('sftp.loading') }}</span>
+          <el-button size="small" @click="emit('cancelLoad')">{{ t('sftp.cancel') }}</el-button>
+        </div>
+      </div>
+      <el-table
+        ref="tableRef"
+        :key="locale"
+        :data="filteredFiles"
+        size="small"
+        @row-click="onRowClick"
+        @row-dblclick="onRowDblClick"
+        @row-contextmenu="onRowContextMenu"
+      >
+      <el-table-column :label="t('sftp.name')" min-width="160" sortable :sort-method="sortByName">
         <template #default="{ row }">
           <div class="name-cell" :draggable="true" @dragstart="onDragStart($event, row)">
-            <el-icon v-if="row.isDir"><Folder /></el-icon>
+            <el-icon v-if="isSymlink(row)"><Link /></el-icon>
+            <el-icon v-else-if="row.isDir"><Folder /></el-icon>
             <el-icon v-else><Document /></el-icon>
-            <span class="file-name" :class="{ selected: isSelected(row) }">{{ row.name }}</span>
+            <div class="name-info">
+              <span class="file-name" :class="{ selected: isSelected(row) }">{{ row.name }}</span>
+              <span class="file-mode">{{ row.mode }}</span>
+            </div>
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="mode" label="Permission" width="100" />
-      <el-table-column label="Modified" width="130">
+      <el-table-column :label="t('sftp.modified')" width="150" sortable :sort-method="sortByTime">
         <template #default="{ row }">
           {{ formatDate(row.modTime) }}
         </template>
       </el-table-column>
-      <el-table-column label="Type" width="70">
-        <template #default="{ row }">
-          {{ row.isDir ? 'Directory' : 'File' }}
-        </template>
-      </el-table-column>
-      <el-table-column label="Size" width="70" align="right">
+      <el-table-column :label="t('sftp.size')" width="70" align="right" sortable :sort-method="sortBySize">
         <template #default="{ row }">
           {{ row.isDir ? '-' : formatSize(row.size) }}
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <Teleport to="body">
       <div
@@ -50,36 +70,21 @@
         :style="contextMenuStyle"
         @click.stop
       >
-        <template v-if="menuType === 'file'">
-          <div class="menu-item" @click="doDownload">Download</div>
-          <div class="menu-item" @click="doSendToOther">Send to {{ targetSide }}</div>
-          <div class="menu-item" @click="doRename">Rename</div>
-          <div class="menu-item" @click="doMove">Move</div>
-          <div class="menu-item" @click="doDelete">Delete</div>
+        <template v-if="menuType === 'file' || menuType === 'dir'">
+          <div class="menu-item" @click="doSendToOther">{{ t(sendToKey) }}</div>
+          <div v-if="mode === 'remote'" class="menu-item" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</div>
           <div class="menu-divider" />
-          <div class="menu-item" @click="doRefresh">Refresh</div>
-          <div class="menu-item" @click="doMkdir">New Directory</div>
-          <div class="menu-item" @click="doChmod">Change Permission</div>
-        </template>
-        <template v-else-if="menuType === 'dir'">
-          <div class="menu-item" @click="doEnter">Enter Directory</div>
-          <div class="menu-item" @click="doSendToOther">Send to {{ targetSide }}</div>
-          <div class="menu-item" @click="doRename">Rename</div>
-          <div class="menu-item" @click="doMove">Move</div>
-          <div class="menu-item" @click="doDelete">Delete</div>
-          <div class="menu-divider" />
-          <div class="menu-item" @click="doRefresh">Refresh</div>
-          <div class="menu-item" @click="doMkdir">New Directory</div>
-          <div class="menu-item" @click="doChmod">Change Permission</div>
+          <div class="menu-item" @click="doRename">{{ t('sftp.rename') }}</div>
+          <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
+          <div v-if="mode === 'remote'" class="menu-item" @click="doChmod">{{ t('sftp.changePermission') }}</div>
         </template>
         <template v-else-if="menuType === 'batch'">
-          <div class="menu-item" @click="doBatchDownload">Download Selected</div>
-          <div class="menu-item" @click="doBatchSendToOther">Send to {{ targetSide }}</div>
-          <div class="menu-item" @click="doBatchDelete">Delete Selected</div>
+          <div class="menu-item" @click="doSendToOther">{{ t(sendToKey) }}</div>
+          <div v-if="mode === 'remote'" class="menu-item" @click="doDownloadTo">{{ t('sftp.downloadTo') }}</div>
           <div class="menu-divider" />
-          <div class="menu-item" @click="doRefresh">Refresh</div>
-          <div class="menu-item disabled">Rename (single only)</div>
-          <div class="menu-item disabled">Change Permission (single only)</div>
+          <div class="menu-item disabled">{{ t('sftp.renameDisabled') }}</div>
+          <div class="menu-item" @click="doDelete">{{ t('sftp.delete') }}</div>
+          <div v-if="mode === 'remote'" class="menu-item disabled">{{ t('sftp.chmodDisabled') }}</div>
         </template>
       </div>
     </Teleport>
@@ -87,8 +92,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Folder, Document } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Folder, Document, Link, Refresh, FolderAdd, View, Upload } from '@element-plus/icons-vue'
+import { useI18n } from '../i18n'
 
 export interface FileItem {
   name: string
@@ -96,41 +102,57 @@ export interface FileItem {
   modTime: string
   mode: string
   isDir: boolean
+  owner: string
+  group: string
 }
 
 const props = defineProps<{
   files: FileItem[]
   mode: 'local' | 'remote'
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
   open: [item: FileItem]
   navigate: [path: string]
-  download: [items: FileItem[]]
   sendToOther: [items: FileItem[]]
   rename: [item: FileItem]
-  move: [items: FileItem[]]
   delete: [items: FileItem[]]
   refresh: []
   mkdir: []
   chmod: [item: FileItem]
+  upload: []
+  downloadTo: [items: FileItem[]]
+  cancelLoad: []
 }>()
 
+const { t, locale } = useI18n()
+
 const filterText = ref('')
+const showHidden = ref(false)
 const selectedItems = ref<FileItem[]>([])
 const lastClickedIndex = ref(-1)
 const contextMenuVisible = ref(false)
 const contextMenuStyle = ref({ left: '0px', top: '0px' })
 const menuType = ref<'file' | 'dir' | 'batch'>('file')
 
-const targetSide = computed(() => props.mode === 'local' ? 'Remote' : 'Local')
+const targetSide = computed(() => props.mode === 'local' ? t('sftp.remote') : t('sftp.local'))
+const sendToKey = computed(() => props.mode === 'local' ? 'sftp.sendToRemote' : 'sftp.sendToLocal')
 
 const filteredFiles = computed(() => {
   let list = [...props.files]
-  // Add ".." if not at root (detected by checking if files already has it or if parent knows)
-  // For now always prepend ".." as first item unless already present
   if (!list.find(f => f.name === '..')) {
-    list.unshift({ name: '..', size: 0, modTime: '', mode: '', isDir: true })
+    list.unshift({ name: '..', size: 0, modTime: '', mode: '', isDir: true, owner: '', group: '' })
+  }
+  list.sort((a, b) => {
+    if (a.name === '..') return -1
+    if (b.name === '..') return 1
+    if (a.isDir && !b.isDir) return -1
+    if (!a.isDir && b.isDir) return 1
+    return a.name.localeCompare(b.name)
+  })
+  if (!showHidden.value) {
+    list = list.filter(f => f.name === '..' || !f.name.startsWith('.'))
   }
   const q = filterText.value.trim().toLowerCase()
   if (!q) return list
@@ -141,10 +163,36 @@ function isSelected(row: FileItem): boolean {
   return selectedItems.value.some(s => s.name === row.name)
 }
 
+function isSymlink(row: FileItem): boolean {
+  return row.mode.startsWith('L') || row.mode.startsWith('l')
+}
+
 function formatDate(ts: string): string {
   if (!ts) return '-'
   const d = new Date(ts)
   return d.toLocaleString()
+}
+
+function sortByName(a: FileItem, b: FileItem): number {
+  if (a.name === '..') return -1
+  if (b.name === '..') return 1
+  return a.name.localeCompare(b.name)
+}
+
+function sortByTime(a: FileItem, b: FileItem): number {
+  if (a.name === '..') return -1
+  if (b.name === '..') return 1
+  const ta = a.modTime ? new Date(a.modTime).getTime() : 0
+  const tb = b.modTime ? new Date(b.modTime).getTime() : 0
+  return ta - tb
+}
+
+function sortBySize(a: FileItem, b: FileItem): number {
+  if (a.name === '..') return -1
+  if (b.name === '..') return 1
+  if (a.isDir && !b.isDir) return -1
+  if (!a.isDir && b.isDir) return 1
+  return a.size - b.size
 }
 
 function formatSize(bytes: number): string {
@@ -185,8 +233,10 @@ function onRowDblClick(row: FileItem) {
   }
 }
 
-function onRowContextMenu(event: MouseEvent, row: FileItem) {
+function onRowContextMenu(row: FileItem, _column: any, event: MouseEvent) {
   event.preventDefault()
+  event.stopPropagation()
+  closeMenu()
   if (!selectedItems.value.some(s => s.name === row.name)) {
     selectedItems.value = [row]
   }
@@ -197,25 +247,42 @@ function onRowContextMenu(event: MouseEvent, row: FileItem) {
   } else {
     menuType.value = 'file'
   }
-  contextMenuStyle.value = { left: event.clientX + 'px', top: event.clientY + 'px' }
+  // Clamp position to keep menu within viewport
+  const menuW = 170
+  const menuH = 150
+  let x = event.clientX
+  let y = event.clientY
+  if (x + menuW > window.innerWidth) x -= menuW
+  if (y + menuH > window.innerHeight) y = event.clientY - menuH
+  contextMenuStyle.value = { left: x + 'px', top: y + 'px' }
   contextMenuVisible.value = true
-  document.addEventListener('click', closeMenu, { once: true })
+  document.addEventListener('mousedown', closeMenu, { once: true })
 }
 
 function closeMenu() {
   contextMenuVisible.value = false
 }
 
-function doDownload() { emit('download', [...selectedItems.value]); closeMenu() }
+function onGlobalContextMenu(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('.sftp-file-list')) {
+    closeMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('contextmenu', onGlobalContextMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('contextmenu', onGlobalContextMenu)
+})
+
 function doSendToOther() { emit('sendToOther', [...selectedItems.value]); closeMenu() }
+function doDownloadTo() { emit('downloadTo', [...selectedItems.value]); closeMenu() }
 function doRename() { emit('rename', selectedItems.value[0]); closeMenu() }
-function doMove() { emit('move', [...selectedItems.value]); closeMenu() }
 function doDelete() { emit('delete', [...selectedItems.value]); closeMenu() }
-function doRefresh() { emit('refresh'); closeMenu() }
-function doMkdir() { emit('mkdir'); closeMenu() }
 function doChmod() { emit('chmod', selectedItems.value[0]); closeMenu() }
-function doEnter() { emit('navigate', selectedItems.value[0]?.name || '.'); closeMenu() }
-function doBatchDownload() { emit('download', [...selectedItems.value]); closeMenu() }
 function doBatchSendToOther() { emit('sendToOther', [...selectedItems.value]); closeMenu() }
 function doBatchDelete() { emit('delete', [...selectedItems.value]); closeMenu() }
 
@@ -238,19 +305,37 @@ function onDragStart(event: DragEvent, row: FileItem) {
   overflow: hidden;
 }
 .filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--border-subtle);
+}
+.filter-bar .el-input {
+  flex: 1;
+}
+.filter-bar .el-button + .el-button {
+  margin-left: 2px;
 }
 .name-cell {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+.name-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
 .file-name {
-  margin-left: 2px;
+  color: var(--text-primary);
 }
 .file-name.selected {
   color: var(--accent);
+}
+.file-mode {
+  font-size: 11px;
+  color: var(--text-disabled);
 }
 </style>
 
@@ -282,5 +367,83 @@ function onDragStart(event: DragEvent, row: FileItem) {
   height: 1px;
   background: var(--border-subtle);
   margin: 4px;
+}
+
+/* Custom loading overlay */
+.table-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.loading-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Remove horizontal borders between data rows (keep header border) */
+.sftp-file-list .el-table__inner-wrapper::before {
+  height: 0 !important;
+}
+.sftp-file-list .el-table td.el-table__cell {
+  border-bottom: none !important;
+}
+
+/* Make table fill entire pane with consistent background */
+.sftp-file-list .el-table {
+  flex: 1;
+}
+.sftp-file-list .el-table__inner-wrapper {
+  height: 100%;
+}
+.sftp-file-list .el-table__body-wrapper {
+  background: transparent;
+}
+.sftp-file-list .el-table__empty-block,
+.sftp-file-list .el-table__empty-text {
+  background: transparent;
+}
+
+/* Override ElMessage popup to match dark theme */
+.el-message {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.el-message .el-message__content {
+  color: var(--text-primary) !important;
+}
+.el-message--error {
+  background: var(--bg-surface) !important;
+}
+.el-message--error .el-message__content {
+  color: #f56c6c !important;
 }
 </style>

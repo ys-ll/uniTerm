@@ -7,7 +7,10 @@
     @dragstart="onDragStart"
     @contextmenu="onContextMenu"
   >
-    <span v-if="!editing" class="tab-name" @dblclick.stop="startEdit">{{ tab.name }}</span>
+    <span v-if="!editing" class="tab-name" @dblclick.stop="startEdit">
+      <span v-if="hasActiveTransfers" class="transfer-indicator" title="Transferring...">&#8595;</span>
+      {{ tab.name }}
+    </span>
     <input
       v-else
       ref="editInputRef"
@@ -85,6 +88,11 @@ const editInputRef = ref<HTMLInputElement>()
 const isAILocked = computed(() => {
   if (props.tab.type !== 'terminal') return false
   return tabStore.aiLockedPanelId === props.tab.panelId
+})
+
+const hasActiveTransfers = computed(() => {
+  const tasks = panelStore.getTransferTasks(props.tab.panelId)
+  return tasks.some(t => t.status === 'running' || t.status === 'paused')
 })
 
 function onDragStart(e: DragEvent) {
@@ -215,6 +223,15 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.transfer-indicator {
+  font-size: 12px;
+  color: var(--accent);
+  flex-shrink: 0;
+  line-height: 1;
 }
 .tab-name-input {
   font-size: 13px;

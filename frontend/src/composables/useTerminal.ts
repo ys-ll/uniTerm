@@ -26,6 +26,127 @@ export interface UseTerminalReturn {
   setRetryOnEnter: (value: boolean) => void
 }
 
+export function getXtermTheme(name: string): any {
+  const base = {
+    background: 'var(--bg-base)',
+    foreground: 'var(--text-primary)',
+    cursor: 'var(--accent)',
+    selectionBackground: 'rgba(34, 211, 238, 0.2)',
+    black: '#1e1e22',
+    red: '#f87171',
+    green: '#34d399',
+    yellow: '#fbbf24',
+    blue: '#60a5fa',
+    magenta: '#c084fc',
+    cyan: '#22d3ee',
+    white: '#e8e8ec',
+    brightBlack: '#3f3f46',
+    brightRed: '#fca5a5',
+    brightGreen: '#6ee7b7',
+    brightYellow: '#fde68a',
+    brightBlue: '#93c5fd',
+    brightMagenta: '#d8b4fe',
+    brightCyan: '#67e8f9',
+    brightWhite: '#fafafa'
+  }
+  switch (name) {
+    case 'light':
+      return {
+        background: '#fafafa',
+        foreground: '#1f1f1f',
+        cursor: '#007acc',
+        selectionBackground: 'rgba(0, 122, 204, 0.2)',
+        black: '#1e1e22',
+        red: '#d32f2f',
+        green: '#388e3c',
+        yellow: '#f9a825',
+        blue: '#1976d2',
+        magenta: '#7b1fa2',
+        cyan: '#00838f',
+        white: '#e0e0e0',
+        brightBlack: '#616161',
+        brightRed: '#e57373',
+        brightGreen: '#81c784',
+        brightYellow: '#fff176',
+        brightBlue: '#64b5f6',
+        brightMagenta: '#ba68c8',
+        brightCyan: '#4dd0e1',
+        brightWhite: '#ffffff'
+      }
+    case 'solarized-dark':
+      return {
+        background: '#002b36',
+        foreground: '#839496',
+        cursor: '#93a1a1',
+        selectionBackground: 'rgba(147, 161, 161, 0.3)',
+        black: '#073642',
+        red: '#dc322f',
+        green: '#859900',
+        yellow: '#b58900',
+        blue: '#268bd2',
+        magenta: '#d33682',
+        cyan: '#2aa198',
+        white: '#eee8d5',
+        brightBlack: '#002b36',
+        brightRed: '#cb4b16',
+        brightGreen: '#586e75',
+        brightYellow: '#657b83',
+        brightBlue: '#839496',
+        brightMagenta: '#6c71c4',
+        brightCyan: '#93a1a1',
+        brightWhite: '#fdf6e3'
+      }
+    case 'solarized-light':
+      return {
+        background: '#fdf6e3',
+        foreground: '#657b83',
+        cursor: '#586e75',
+        selectionBackground: 'rgba(88, 110, 117, 0.3)',
+        black: '#002b36',
+        red: '#dc322f',
+        green: '#859900',
+        yellow: '#b58900',
+        blue: '#268bd2',
+        magenta: '#d33682',
+        cyan: '#2aa198',
+        white: '#073642',
+        brightBlack: '#eee8d5',
+        brightRed: '#cb4b16',
+        brightGreen: '#93a1a1',
+        brightYellow: '#839496',
+        brightBlue: '#657b83',
+        brightMagenta: '#6c71c4',
+        brightCyan: '#586e75',
+        brightWhite: '#1e1e1e'
+      }
+    case 'monokai':
+      return {
+        background: '#272822',
+        foreground: '#f8f8f2',
+        cursor: '#f8f8f0',
+        selectionBackground: 'rgba(248, 248, 240, 0.2)',
+        black: '#272822',
+        red: '#f92672',
+        green: '#a6e22e',
+        yellow: '#f4bf75',
+        blue: '#66d9ef',
+        magenta: '#ae81ff',
+        cyan: '#a1efe4',
+        white: '#f8f8f2',
+        brightBlack: '#75715e',
+        brightRed: '#f92672',
+        brightGreen: '#a6e22e',
+        brightYellow: '#f4bf75',
+        brightBlue: '#66d9ef',
+        brightMagenta: '#ae81ff',
+        brightCyan: '#a1efe4',
+        brightWhite: '#f9f8f5'
+      }
+    default:
+      return base
+  }
+}
+
 export function useTerminal(
   getSessionId: () => string | null | undefined,
   options?: UseTerminalOptions
@@ -47,127 +168,6 @@ export function useTerminal(
   let splitResizing = false
   let suppressResizeUntil = 0
   let retryOnEnter = false
-
-  function getXtermTheme(name: string): any {
-    const base = {
-      background: 'var(--bg-base)',
-      foreground: 'var(--text-primary)',
-      cursor: 'var(--accent)',
-      selectionBackground: 'rgba(34, 211, 238, 0.2)',
-      black: '#1e1e22',
-      red: '#f87171',
-      green: '#34d399',
-      yellow: '#fbbf24',
-      blue: '#60a5fa',
-      magenta: '#c084fc',
-      cyan: '#22d3ee',
-      white: '#e8e8ec',
-      brightBlack: '#3f3f46',
-      brightRed: '#fca5a5',
-      brightGreen: '#6ee7b7',
-      brightYellow: '#fde68a',
-      brightBlue: '#93c5fd',
-      brightMagenta: '#d8b4fe',
-      brightCyan: '#67e8f9',
-      brightWhite: '#fafafa'
-    }
-    switch (name) {
-      case 'light':
-        return {
-          background: '#fafafa',
-          foreground: '#1f1f1f',
-          cursor: '#007acc',
-          selectionBackground: 'rgba(0, 122, 204, 0.2)',
-          black: '#1e1e22',
-          red: '#d32f2f',
-          green: '#388e3c',
-          yellow: '#f9a825',
-          blue: '#1976d2',
-          magenta: '#7b1fa2',
-          cyan: '#00838f',
-          white: '#e0e0e0',
-          brightBlack: '#616161',
-          brightRed: '#e57373',
-          brightGreen: '#81c784',
-          brightYellow: '#fff176',
-          brightBlue: '#64b5f6',
-          brightMagenta: '#ba68c8',
-          brightCyan: '#4dd0e1',
-          brightWhite: '#ffffff'
-        }
-      case 'solarized-dark':
-        return {
-          background: '#002b36',
-          foreground: '#839496',
-          cursor: '#93a1a1',
-          selectionBackground: 'rgba(147, 161, 161, 0.3)',
-          black: '#073642',
-          red: '#dc322f',
-          green: '#859900',
-          yellow: '#b58900',
-          blue: '#268bd2',
-          magenta: '#d33682',
-          cyan: '#2aa198',
-          white: '#eee8d5',
-          brightBlack: '#002b36',
-          brightRed: '#cb4b16',
-          brightGreen: '#586e75',
-          brightYellow: '#657b83',
-          brightBlue: '#839496',
-          brightMagenta: '#6c71c4',
-          brightCyan: '#93a1a1',
-          brightWhite: '#fdf6e3'
-        }
-      case 'solarized-light':
-        return {
-          background: '#fdf6e3',
-          foreground: '#657b83',
-          cursor: '#586e75',
-          selectionBackground: 'rgba(88, 110, 117, 0.3)',
-          black: '#002b36',
-          red: '#dc322f',
-          green: '#859900',
-          yellow: '#b58900',
-          blue: '#268bd2',
-          magenta: '#d33682',
-          cyan: '#2aa198',
-          white: '#073642',
-          brightBlack: '#eee8d5',
-          brightRed: '#cb4b16',
-          brightGreen: '#93a1a1',
-          brightYellow: '#839496',
-          brightBlue: '#657b83',
-          brightMagenta: '#6c71c4',
-          brightCyan: '#586e75',
-          brightWhite: '#1e1e1e'
-        }
-      case 'monokai':
-        return {
-          background: '#272822',
-          foreground: '#f8f8f2',
-          cursor: '#f8f8f0',
-          selectionBackground: 'rgba(248, 248, 240, 0.2)',
-          black: '#272822',
-          red: '#f92672',
-          green: '#a6e22e',
-          yellow: '#f4bf75',
-          blue: '#66d9ef',
-          magenta: '#ae81ff',
-          cyan: '#a1efe4',
-          white: '#f8f8f2',
-          brightBlack: '#75715e',
-          brightRed: '#f92672',
-          brightGreen: '#a6e22e',
-          brightYellow: '#f4bf75',
-          brightBlue: '#66d9ef',
-          brightMagenta: '#ae81ff',
-          brightCyan: '#a1efe4',
-          brightWhite: '#f9f8f5'
-        }
-      default:
-        return base
-    }
-  }
 
   function getTerminalOptions() {
     const ts = settingsStore.settings.terminal

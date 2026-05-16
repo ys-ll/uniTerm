@@ -1,13 +1,14 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	osUser "os/user"
+	"path"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,17 +23,20 @@ type SFTPSession struct {
 	cwd        string
 	localCwd   string
 	mu         sync.RWMutex
+	transfers  map[string]*TransferTask
 }
 
 func NewSFTPSession(id string) *SFTPSession {
+	homeDir, _ := os.UserHomeDir()
 	return &SFTPSession{
 		baseSession: baseSession{
 			id:          id,
 			sessionType: "sftp",
 			status:      StatusDisconnected,
 		},
-		cwd:      "/",
-		localCwd: ".",
+		cwd:       "/",
+		localCwd:  homeDir,
+		transfers: make(map[string]*TransferTask),
 	}
 }
 
@@ -87,16 +91,16 @@ func (s *SFTPSession) Connect(config ConnectionConfig) error {
 
 	s.sshClient = client
 	s.sftpClient = sc
+	if wd, err := sc.Getwd(); err == nil {
+		s.cwd = wd
+	}
 	s.setStatus(StatusConnected)
 
 	return nil
 }
 
 func (s *SFTPSession) Write(data []byte) error {
-	if s.sftpClient == nil {
-		return fmt.Errorf("not connected")
-	}
-	return s.handleCommand(strings.TrimSpace(string(data)))
+	return nil
 }
 
 func (s *SFTPSession) Resize(cols, rows int) error {
@@ -118,13 +122,21 @@ func (s *SFTPSession) IsConnected() bool {
 	return s.Status() == StatusConnected
 }
 
-// SFTPFileInfo matches frontend expectation.
-type SFTPFileInfo struct {
-	Name    string      `json:"name"`
-	Size    int64       `json:"size"`
-	ModTime time.Time   `json:"modTime"`
-	Mode    os.FileMode `json:"mode"`
-	IsDir   bool        `json:"isDir"`
+// FileItem represents a file entry returned to the frontend.
+type FileItem struct {
+	Name    string `json:"name"`
+	Size    int64  `json:"size"`
+	ModTime string `json:"modTime"`
+	Mode    string `json:"mode"`
+	IsDir   bool   `json:"isDir"`
+	Owner   string `json:"owner"`
+	Group   string `json:"group"`
+}
+
+// FileListResult wraps files + current directory for a list response.
+type FileListResult struct {
+	Files []FileItem `json:"files"`
+	Dir   string     `json:"dir"`
 }
 
 // TransferTask tracks an ongoing file transfer.
@@ -135,311 +147,575 @@ type TransferTask struct {
 	RemotePath string
 	Progress   int64
 	Total      int64
-	Status     string // "pending" | "running" | "done" | "error"
+	Status     string // "pending" | "running" | "paused" | "done" | "error" | "cancelled"
+	ctx        context.Context
+	cancel     context.CancelFunc
+	paused     bool
+	pauseCh    chan struct{}
 }
 
-func (s *SFTPSession) handleCommand(cmd string) error {
-	parts := strings.Fields(cmd)
-	if len(parts) == 0 {
-		return nil
-	}
+func (t *TransferTask) start() {
+	t.ctx, t.cancel = context.WithCancel(context.Background())
+	t.pauseCh = make(chan struct{})
+}
 
-	switch parts[0] {
-	case "ls":
-		path := s.cwd
-		if len(parts) > 1 {
-			path = s.resolvePath(parts[1])
-		}
-		return s.cmdLS(path)
-	case "cd":
-		if len(parts) < 2 {
-			s.emitText("Usage: cd <path>\r\n")
-			return nil
-		}
-		return s.cmdCD(parts[1])
-	case "pwd":
-		s.emitText(s.cwd + "\r\n")
-		return nil
-	case "lls":
-		path := s.localCwd
-		if len(parts) > 1 {
-			path = filepath.Join(s.localCwd, parts[1])
-		}
-		return s.cmdLLS(path)
-	case "lcd":
-		if len(parts) < 2 {
-			s.emitText("Usage: lcd <path>\r\n")
-			return nil
-		}
-		return s.cmdLCD(parts[1])
-	case "lpwd":
-		abs, _ := filepath.Abs(s.localCwd)
-		s.emitText(abs + "\r\n")
-		return nil
-	case "mkdir":
-		if len(parts) < 2 {
-			s.emitText("Usage: mkdir <path>\r\n")
-			return nil
-		}
-		path := s.resolvePath(parts[1])
-		err := s.sftpClient.Mkdir(path)
-		if err != nil {
-			s.emitText(fmt.Sprintf("Error: %v\r\n", err))
-		} else {
-			s.emitText(fmt.Sprintf("Created directory: %s\r\n", path))
-		}
-		return nil
-	case "rm":
-		if len(parts) < 2 {
-			s.emitText("Usage: rm <path>\r\n")
-			return nil
-		}
-		path := s.resolvePath(parts[1])
-		err := s.sftpClient.Remove(path)
-		if err != nil {
-			s.emitText(fmt.Sprintf("Error: %v\r\n", err))
-		} else {
-			s.emitText(fmt.Sprintf("Removed: %s\r\n", path))
-		}
-		return nil
-	case "rmdir":
-		if len(parts) < 2 {
-			s.emitText("Usage: rmdir <path>\r\n")
-			return nil
-		}
-		path := s.resolvePath(parts[1])
-		err := s.sftpClient.RemoveDirectory(path)
-		if err != nil {
-			s.emitText(fmt.Sprintf("Error: %v\r\n", err))
-		} else {
-			s.emitText(fmt.Sprintf("Removed directory: %s\r\n", path))
-		}
-		return nil
-	case "mv":
-		if len(parts) < 3 {
-			s.emitText("Usage: mv <old> <new>\r\n")
-			return nil
-		}
-		oldPath := s.resolvePath(parts[1])
-		newPath := s.resolvePath(parts[2])
-		err := s.sftpClient.Rename(oldPath, newPath)
-		if err != nil {
-			s.emitText(fmt.Sprintf("Error: %v\r\n", err))
-		} else {
-			s.emitText(fmt.Sprintf("Renamed: %s -> %s\r\n", oldPath, newPath))
-		}
-		return nil
-	case "chmod":
-		if len(parts) < 3 {
-			s.emitText("Usage: chmod <mode> <path>\r\n")
-			return nil
-		}
-		modeStr := parts[1]
-		path := s.resolvePath(parts[2])
-		mode, err := strconv.ParseUint(modeStr, 8, 32)
-		if err != nil {
-			s.emitText(fmt.Sprintf("Invalid mode: %s\r\n", modeStr))
-			return nil
-		}
-		err = s.sftpClient.Chmod(path, os.FileMode(mode))
-		if err != nil {
-			s.emitText(fmt.Sprintf("Error: %v\r\n", err))
-		} else {
-			s.emitText(fmt.Sprintf("Changed mode of %s to %s\r\n", path, modeStr))
-		}
-		return nil
-	case "get":
-		if len(parts) < 2 {
-			s.emitText("Usage: get <remote> [local]\r\n")
-			return nil
-		}
-		remotePath := s.resolvePath(parts[1])
-		localPath := filepath.Join(s.localCwd, filepath.Base(remotePath))
-		if len(parts) > 2 {
-			localPath = filepath.Join(s.localCwd, parts[2])
-		}
-		task := &TransferTask{
-			ID:         fmt.Sprintf("dl-%d", time.Now().UnixNano()),
-			Type:       "download",
-			LocalPath:  localPath,
-			RemotePath: remotePath,
-			Status:     "pending",
-		}
-		s.emitText(fmt.Sprintf("Downloading %s -> %s\r\n", remotePath, localPath))
-		s.startTransfer(task)
-		return nil
-	case "put":
-		if len(parts) < 2 {
-			s.emitText("Usage: put <local> [remote]\r\n")
-			return nil
-		}
-		localPath := filepath.Join(s.localCwd, parts[1])
-		remotePath := s.resolvePath(filepath.Base(localPath))
-		if len(parts) > 2 {
-			remotePath = s.resolvePath(parts[2])
-		}
-		task := &TransferTask{
-			ID:         fmt.Sprintf("ul-%d", time.Now().UnixNano()),
-			Type:       "upload",
-			LocalPath:  localPath,
-			RemotePath: remotePath,
-			Status:     "pending",
-		}
-		s.emitText(fmt.Sprintf("Uploading %s -> %s\r\n", localPath, remotePath))
-		s.startTransfer(task)
-		return nil
-	case "help":
-		s.cmdHelp()
-		return nil
-	default:
-		s.emitText(fmt.Sprintf("Unknown command: %s. Type 'help' for usage.\r\n", parts[0]))
-		return nil
+func (t *TransferTask) done() {
+	if t.cancel != nil {
+		t.cancel()
 	}
 }
 
-func (s *SFTPSession) resolvePath(p string) string {
-	if filepath.IsAbs(p) {
-		return p
+func (t *TransferTask) waitIfPaused() {
+	for {
+		if t.paused {
+			select {
+			case <-t.pauseCh:
+				continue
+			case <-t.ctx.Done():
+				return
+			}
+		}
+		return
 	}
-	return filepath.Join(s.cwd, p)
 }
 
-func (s *SFTPSession) cmdLS(path string) error {
-	infos, err := s.sftpClient.ReadDir(path)
+func resolveOwnerGroup(fi os.FileInfo) (string, string) {
+	owner := ""
+	group := ""
+	if stat, ok := fi.Sys().(*sftp.FileStat); ok {
+		if stat.UID > 0 {
+			owner = fmt.Sprintf("%d", stat.UID)
+		}
+		if stat.GID > 0 {
+			group = fmt.Sprintf("%d", stat.GID)
+		}
+	}
+	return owner, group
+}
+
+// --- Public API methods (called from app.go Wails bindings) ---
+
+func (s *SFTPSession) requireClient() error {
+	if s.sftpClient == nil {
+		return fmt.Errorf("SFTP session not connected")
+	}
+	return nil
+}
+
+func (s *SFTPSession) ListRemote(dir string) (FileListResult, error) {
+	if err := s.requireClient(); err != nil {
+		return FileListResult{}, err
+	}
+	if dir == "" {
+		dir = s.cwd
+	} else if !path.IsAbs(dir) {
+		dir = path.Join(s.cwd, dir)
+	}
+	infos, err := s.sftpClient.ReadDir(dir)
 	if err != nil {
-		s.emitText(fmt.Sprintf("Error: %v\r\n", err))
-		return nil
+		return FileListResult{}, err
 	}
-
-	files := make([]SFTPFileInfo, 0, len(infos))
-	var text strings.Builder
-	text.WriteString(fmt.Sprintf("%-40s %10s %12s %s\r\n", "Name", "Size", "Mode", "Modified"))
+	files := make([]FileItem, 0, len(infos))
 	for _, fi := range infos {
-		files = append(files, SFTPFileInfo{
+		owner, group := resolveOwnerGroup(fi)
+		isDir := fi.IsDir()
+		if fi.Mode()&os.ModeSymlink != 0 {
+			if target, err := s.sftpClient.Stat(path.Join(dir, fi.Name())); err == nil {
+				isDir = target.IsDir()
+			}
+		}
+		files = append(files, FileItem{
 			Name:    fi.Name(),
 			Size:    fi.Size(),
-			ModTime: fi.ModTime(),
-			Mode:    fi.Mode(),
-			IsDir:   fi.IsDir(),
+			ModTime: fi.ModTime().Format(time.RFC3339),
+			Mode:    fi.Mode().String(),
+			IsDir:   isDir,
+			Owner:   owner,
+			Group:   group,
 		})
-		sizeStr := fmt.Sprintf("%d", fi.Size())
-		if fi.IsDir() {
-			sizeStr = "-"
-		}
-		text.WriteString(fmt.Sprintf("%-40s %10s %12s %s\r\n",
-			fi.Name(), sizeStr, fi.Mode().String(), fi.ModTime().Format("2006-01-02 15:04")))
 	}
-
-	s.emitText(text.String())
-	s.emitFileList(files, path)
-	return nil
+	return FileListResult{Files: files, Dir: dir}, nil
 }
 
-func (s *SFTPSession) cmdCD(path string) error {
-	target := s.resolvePath(path)
-	fi, err := s.sftpClient.Stat(target)
+func (s *SFTPSession) ListLocal(dir string) (FileListResult, error) {
+	if dir == "" {
+		dir = s.localCwd
+	} else if !filepath.IsAbs(dir) {
+		dir = filepath.Join(s.localCwd, dir)
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		s.emitText(fmt.Sprintf("No such file or directory: %s\r\n", target))
-		return nil
+		return FileListResult{}, err
 	}
-	if !fi.IsDir() {
-		s.emitText(fmt.Sprintf("Not a directory: %s\r\n", target))
-		return nil
-	}
-	real, err := s.sftpClient.RealPath(target)
-	if err != nil {
-		real = target
-	}
-	s.mu.Lock()
-	s.cwd = real
-	s.mu.Unlock()
-	s.emitText(fmt.Sprintf("Changed to: %s\r\n", real))
-	return nil
-}
-
-func (s *SFTPSession) cmdLLS(path string) error {
-	infos, err := os.ReadDir(path)
-	if err != nil {
-		s.emitText(fmt.Sprintf("Error: %v\r\n", err))
-		return nil
-	}
-
-	files := make([]SFTPFileInfo, 0, len(infos))
-	var text strings.Builder
-	text.WriteString(fmt.Sprintf("%-40s %10s %12s %s\r\n", "Name", "Size", "Mode", "Modified"))
-	for _, entry := range infos {
-		fi, _ := entry.Info()
+	files := make([]FileItem, 0, len(entries))
+	for _, e := range entries {
+		fi, _ := e.Info()
 		var size int64
 		var mode os.FileMode
 		var modTime time.Time
-		isDir := entry.IsDir()
 		if fi != nil {
 			size = fi.Size()
 			mode = fi.Mode()
 			modTime = fi.ModTime()
 		}
-		files = append(files, SFTPFileInfo{
-			Name:    entry.Name(),
-			Size:    size,
-			ModTime: modTime,
-			Mode:    mode,
-			IsDir:   isDir,
-		})
-		sizeStr := fmt.Sprintf("%d", size)
-		if isDir {
-			sizeStr = "-"
+		owner := ""
+		if currentUser, err := osUser.Current(); err == nil {
+			owner = currentUser.Username
 		}
-		text.WriteString(fmt.Sprintf("%-40s %10s %12s %s\r\n",
-			entry.Name(), sizeStr, mode.String(), modTime.Format("2006-01-02 15:04")))
+		isDir := e.IsDir()
+		if fi != nil && fi.Mode()&os.ModeSymlink != 0 {
+			if target, err := os.Stat(filepath.Join(dir, e.Name())); err == nil {
+				isDir = target.IsDir()
+			}
+		}
+		files = append(files, FileItem{
+			Name:    e.Name(),
+			Size:    size,
+			ModTime: modTime.Format(time.RFC3339),
+			Mode:    mode.String(),
+			IsDir:   isDir,
+			Owner:   owner,
+		})
 	}
-
-	s.emitText(text.String())
-	s.emitLocalList(files, path)
-	return nil
+	return FileListResult{Files: files, Dir: dir}, nil
 }
 
-func (s *SFTPSession) cmdLCD(path string) error {
-	target := filepath.Join(s.localCwd, path)
-	fi, err := os.Stat(target)
+func (s *SFTPSession) ListLocalDrives() ([]FileItem, error) {
+	var drives []FileItem
+	for _, letter := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
+		root := string(letter) + ":\\"
+		fi, err := os.Stat(root)
+		if err != nil {
+			continue
+		}
+		if fi.IsDir() {
+			drives = append(drives, FileItem{
+				Name:    root,
+				Size:    0,
+				ModTime: fi.ModTime().Format(time.RFC3339),
+				Mode:    fi.Mode().String(),
+				IsDir:   true,
+			})
+		}
+	}
+	return drives, nil
+}
+
+func (s *SFTPSession) ChangeRemoteDir(dir string) (FileListResult, error) {
+	if err := s.requireClient(); err != nil {
+		return FileListResult{}, err
+	}
+	target := dir
+	if !path.IsAbs(dir) {
+		target = path.Join(s.cwd, dir)
+	}
+	fi, err := s.sftpClient.Stat(target)
 	if err != nil {
-		s.emitText(fmt.Sprintf("No such file or directory: %s\r\n", target))
-		return nil
+		return FileListResult{}, fmt.Errorf("no such directory: %s", target)
 	}
 	if !fi.IsDir() {
-		s.emitText(fmt.Sprintf("Not a directory: %s\r\n", target))
-		return nil
+		return FileListResult{}, fmt.Errorf("not a directory: %s", target)
+	}
+	real, _ := s.sftpClient.RealPath(target)
+	s.mu.Lock()
+	s.cwd = real
+	s.mu.Unlock()
+	return s.ListRemote(real)
+}
+
+func (s *SFTPSession) ChangeLocalDir(dir string) (FileListResult, error) {
+	target := dir
+	if !filepath.IsAbs(dir) {
+		target = filepath.Join(s.localCwd, dir)
+	}
+	fi, err := os.Stat(target)
+	if err != nil {
+		return FileListResult{}, fmt.Errorf("no such directory: %s", target)
+	}
+	if !fi.IsDir() {
+		return FileListResult{}, fmt.Errorf("not a directory: %s", target)
 	}
 	abs, _ := filepath.Abs(target)
 	s.mu.Lock()
 	s.localCwd = abs
 	s.mu.Unlock()
-	s.emitText(fmt.Sprintf("Local changed to: %s\r\n", abs))
+	return s.ListLocal(abs)
+}
+
+func (s *SFTPSession) MakeDir(dir string) error {
+	if err := s.requireClient(); err != nil {
+		return err
+	}
+	p := dir
+	if !path.IsAbs(p) {
+		p = path.Join(s.cwd, p)
+	}
+	return s.sftpClient.Mkdir(p)
+}
+
+func (s *SFTPSession) Remove(p string, recursive bool) error {
+	if err := s.requireClient(); err != nil {
+		return err
+	}
+	if !path.IsAbs(p) {
+		p = path.Join(s.cwd, p)
+	}
+	if recursive {
+		return s.rmRecursive(p)
+	}
+	fi, err := s.sftpClient.Stat(p)
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		infos, err := s.sftpClient.ReadDir(p)
+		if err != nil {
+			return err
+		}
+		if len(infos) > 0 {
+			return fmt.Errorf("directory not empty (%d items), use recursive=true", len(infos))
+		}
+		return s.sftpClient.RemoveDirectory(p)
+	}
+	return s.sftpClient.Remove(p)
+}
+
+func (s *SFTPSession) Rename(oldName, newName string) error {
+	if err := s.requireClient(); err != nil {
+		return err
+	}
+	old := oldName
+	if !path.IsAbs(old) {
+		old = path.Join(s.cwd, old)
+	}
+	newPath := newName
+	if !path.IsAbs(newPath) {
+		newPath = path.Join(s.cwd, newPath)
+	}
+	return s.sftpClient.Rename(old, newPath)
+}
+
+func (s *SFTPSession) Chmod(p string, mode os.FileMode) error {
+	if err := s.requireClient(); err != nil {
+		return err
+	}
+	if !path.IsAbs(p) {
+		p = path.Join(s.cwd, p)
+	}
+	return s.sftpClient.Chmod(p, mode)
+}
+
+func (s *SFTPSession) Get(remotePath, localPath string, recursive bool) (string, error) {
+	if err := s.requireClient(); err != nil {
+		return "", err
+	}
+	rp := remotePath
+	if !path.IsAbs(rp) {
+		rp = path.Join(s.cwd, rp)
+	}
+	lp := localPath
+	if !filepath.IsAbs(lp) {
+		lp = filepath.Join(s.localCwd, lp)
+	}
+	if recursive {
+		total, err := s.dirSizeRemote(rp)
+		if err != nil {
+			return "", err
+		}
+		task := &TransferTask{
+			ID:         fmt.Sprintf("dl-%d", time.Now().UnixNano()),
+			Type:       "download",
+			LocalPath:  lp,
+			RemotePath: rp,
+			Total:      total,
+			Status:     "running",
+		}
+		task.start()
+		s.mu.Lock()
+		s.transfers[task.ID] = task
+		s.mu.Unlock()
+		s.emitTransferStart(task)
+		go func() {
+			defer func() {
+				task.done()
+				s.mu.Lock()
+				delete(s.transfers, task.ID)
+				s.mu.Unlock()
+			}()
+			if err := s.downloadDir(rp, lp, task); err != nil {
+				task.Status = "error"
+				s.emitTransferEvent(task, err)
+				return
+			}
+			task.Status = "done"
+			s.emitTransferComplete(task)
+		}()
+		return task.ID, nil
+	}
+	task := &TransferTask{
+		ID:         fmt.Sprintf("dl-%d", time.Now().UnixNano()),
+		Type:       "download",
+		LocalPath:  lp,
+		RemotePath: rp,
+		Status:     "pending",
+	}
+	s.startTransfer(task)
+	return task.ID, nil
+}
+
+func (s *SFTPSession) Put(localPath, remotePath string, recursive bool) (string, error) {
+	if err := s.requireClient(); err != nil {
+		return "", err
+	}
+	lp := localPath
+	if !filepath.IsAbs(lp) {
+		lp = filepath.Join(s.localCwd, lp)
+	}
+	rp := remotePath
+	if !path.IsAbs(rp) {
+		rp = path.Join(s.cwd, rp)
+	}
+	if recursive {
+		total, err := s.dirSizeLocal(lp)
+		if err != nil {
+			return "", err
+		}
+		task := &TransferTask{
+			ID:         fmt.Sprintf("ul-%d", time.Now().UnixNano()),
+			Type:       "upload",
+			LocalPath:  lp,
+			RemotePath: rp,
+			Total:      total,
+			Status:     "running",
+		}
+		task.start()
+		s.mu.Lock()
+		s.transfers[task.ID] = task
+		s.mu.Unlock()
+		s.emitTransferStart(task)
+		go func() {
+			defer func() {
+				task.done()
+				s.mu.Lock()
+				delete(s.transfers, task.ID)
+				s.mu.Unlock()
+			}()
+			if err := s.uploadDir(lp, rp, task); err != nil {
+				task.Status = "error"
+				s.emitTransferEvent(task, err)
+				return
+			}
+			task.Status = "done"
+			s.emitTransferComplete(task)
+		}()
+		return task.ID, nil
+	}
+	task := &TransferTask{
+		ID:         fmt.Sprintf("ul-%d", time.Now().UnixNano()),
+		Type:       "upload",
+		LocalPath:  lp,
+		RemotePath: rp,
+		Status:     "pending",
+	}
+	s.startTransfer(task)
+	return task.ID, nil
+}
+
+// --- Local file operations ---
+
+func (s *SFTPSession) LocalRemove(p string, recursive bool) error {
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(s.localCwd, p)
+	}
+	if recursive {
+		return os.RemoveAll(p)
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		entries, err := os.ReadDir(p)
+		if err != nil {
+			return err
+		}
+		if len(entries) > 0 {
+			return fmt.Errorf("directory not empty (%d items)", len(entries))
+		}
+	}
+	return os.Remove(p)
+}
+
+func (s *SFTPSession) LocalRename(oldName, newName string) error {
+	old := oldName
+	if !filepath.IsAbs(old) {
+		old = filepath.Join(s.localCwd, old)
+	}
+	newPath := newName
+	if !filepath.IsAbs(newPath) {
+		newPath = filepath.Join(s.localCwd, newPath)
+	}
+	return os.Rename(old, newPath)
+}
+
+func (s *SFTPSession) LocalMkdir(dir string) error {
+	p := dir
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(s.localCwd, p)
+	}
+	return os.MkdirAll(p, 0755)
+}
+
+// PutContent writes raw content directly to a remote file via SFTP.
+func (s *SFTPSession) PutContent(remotePath string, content []byte) error {
+	if err := s.requireClient(); err != nil {
+		return err
+	}
+	rp := remotePath
+	if !path.IsAbs(rp) {
+		rp = path.Join(s.cwd, rp)
+	}
+	// Ensure parent directory exists
+	parentDir := path.Dir(rp)
+	if err := s.sftpClient.MkdirAll(parentDir); err != nil {
+		return err
+	}
+	f, err := s.sftpClient.Create(rp)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(content)
+	return err
+}
+
+// CancelTransfer cancels an ongoing transfer task.
+func (s *SFTPSession) CancelTransfer(taskID string) error {
+	s.mu.Lock()
+	task, ok := s.transfers[taskID]
+	s.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	if task.cancel != nil {
+		task.cancel()
+	}
 	return nil
 }
 
-func (s *SFTPSession) cmdHelp() {
-	help := `Available commands:
-  ls [path]           List remote files
-  cd <path>           Change remote directory
-  pwd                 Show remote current directory
-  lls [path]          List local files
-  lcd <path>          Change local directory
-  lpwd                Show local current directory
-  get <r> [l]         Download file
-  put <l> [r]         Upload file
-  mkdir <path>        Create remote directory
-  rm <path>           Delete remote file
-  rmdir <path>        Delete remote directory
-  mv <old> <new>      Rename/move file
-  chmod <mode> <path> Change permissions
-  help                Show this help
-`
-	s.emitText(help)
+// PauseTransfer pauses an ongoing transfer task.
+func (s *SFTPSession) PauseTransfer(taskID string) error {
+	s.mu.Lock()
+	task, ok := s.transfers[taskID]
+	s.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	task.paused = true
+	task.Status = "paused"
+	s.emitTransferComplete(task)
+	return nil
 }
 
+// ResumeTransfer resumes a paused transfer task.
+func (s *SFTPSession) ResumeTransfer(taskID string) error {
+	s.mu.Lock()
+	task, ok := s.transfers[taskID]
+	s.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+	task.paused = false
+	task.Status = "running"
+		close(task.pauseCh)
+		task.pauseCh = make(chan struct{})
+		s.emitTransferStart(task)
+		return nil
+	}
+
+// --- Recursive helpers ---
+
+func (s *SFTPSession) rmRecursive(p string) error {
+	fi, err := s.sftpClient.Stat(p)
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		infos, err := s.sftpClient.ReadDir(p)
+		if err != nil {
+			return err
+		}
+		for _, info := range infos {
+			childPath := path.Join(p, info.Name())
+			if err := s.rmRecursive(childPath); err != nil {
+				return err
+			}
+		}
+		return s.sftpClient.RemoveDirectory(p)
+	}
+	return s.sftpClient.Remove(p)
+}
+
+func (s *SFTPSession) dirSizeRemote(dir string) (int64, error) {
+	infos, err := s.sftpClient.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, fi := range infos {
+		if fi.IsDir() {
+			sz, err := s.dirSizeRemote(path.Join(dir, fi.Name()))
+			if err != nil {
+				return 0, err
+			}
+			total += sz
+		} else {
+			total += fi.Size()
+		}
+	}
+	return total, nil
+}
+
+func (s *SFTPSession) dirSizeLocal(dir string) (int64, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, e := range entries {
+		if e.IsDir() {
+			sz, err := s.dirSizeLocal(filepath.Join(dir, e.Name()))
+			if err != nil {
+				return 0, err
+			}
+			total += sz
+		} else {
+			fi, err := e.Info()
+			if err != nil {
+				return 0, err
+			}
+			total += fi.Size()
+		}
+	}
+	return total, nil
+}
+
+// --- Transfer methods ---
+
 func (s *SFTPSession) startTransfer(task *TransferTask) {
+	task.start()
+	s.mu.Lock()
+	s.transfers[task.ID] = task
+	s.mu.Unlock()
 	go func() {
+		defer func() {
+			task.done()
+			s.mu.Lock()
+			delete(s.transfers, task.ID)
+			s.mu.Unlock()
+		}()
 		task.Status = "running"
+		s.emitTransferStart(task)
 		var src io.Reader
 		var dst io.Writer
 
@@ -489,6 +765,21 @@ func (s *SFTPSession) startTransfer(task *TransferTask) {
 
 		buf := make([]byte, 64*1024)
 		for {
+			select {
+			case <-task.ctx.Done():
+				task.Status = "cancelled"
+				s.emitTransferComplete(task)
+				return
+			default:
+			}
+			task.waitIfPaused()
+			select {
+			case <-task.ctx.Done():
+				task.Status = "cancelled"
+				s.emitTransferComplete(task)
+				return
+			default:
+			}
 			n, e := src.Read(buf)
 			if n > 0 {
 				dst.Write(buf[:n])
@@ -506,32 +797,142 @@ func (s *SFTPSession) startTransfer(task *TransferTask) {
 		}
 		task.Status = "done"
 		s.emitTransferComplete(task)
-		if task.Type == "upload" {
-			s.cmdLS(s.cwd)
-		}
 	}()
 }
 
-// emit helpers
-func (s *SFTPSession) emitText(text string) {
-	s.emitData([]byte(text))
-}
-
-func (s *SFTPSession) emitFileList(files []SFTPFileInfo, cwd string) {
-	payload := map[string]interface{}{
-		"type":  "sftp:filelist",
-		"files": files,
-		"cwd":   cwd,
+func (s *SFTPSession) downloadDir(remoteDir, localDir string, task *TransferTask) error {
+	select {
+	case <-task.ctx.Done():
+		return task.ctx.Err()
+	default:
 	}
-	jsonBytes, _ := json.Marshal(payload)
-	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		return err
+	}
+	infos, err := s.sftpClient.ReadDir(remoteDir)
+	if err != nil {
+		return err
+	}
+	for _, fi := range infos {
+		rp := path.Join(remoteDir, fi.Name())
+		lp := filepath.Join(localDir, fi.Name())
+		if fi.IsDir() {
+			if err := s.downloadDir(rp, lp, task); err != nil {
+				return err
+			}
+		} else {
+			if err := s.transferFile(task, rp, lp, "download"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
-func (s *SFTPSession) emitLocalList(files []SFTPFileInfo, localCwd string) {
+func (s *SFTPSession) uploadDir(localDir, remoteDir string, task *TransferTask) error {
+	select {
+	case <-task.ctx.Done():
+		return task.ctx.Err()
+	default:
+	}
+	if err := s.sftpClient.MkdirAll(remoteDir); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(localDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		rp := path.Join(remoteDir, entry.Name())
+		lp := filepath.Join(localDir, entry.Name())
+		if entry.IsDir() {
+			if err := s.uploadDir(lp, rp, task); err != nil {
+				return err
+			}
+		} else {
+			if err := s.transferFile(task, lp, rp, "upload"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *SFTPSession) transferFile(task *TransferTask, localPath, remotePath, tfType string) error {
+	if tfType == "download" {
+		src, err := s.sftpClient.Open(remotePath)
+		if err != nil {
+			return err
+		}
+		defer src.Close()
+		dst, err := os.Create(localPath)
+		if err != nil {
+			return err
+		}
+		defer dst.Close()
+		buf := make([]byte, 64*1024)
+		for {
+			select {
+			case <-task.ctx.Done():
+				return task.ctx.Err()
+			default:
+			}
+			n, e := src.Read(buf)
+			if n > 0 {
+				dst.Write(buf[:n])
+				task.Progress += int64(n)
+				s.emitTransferProgress(task)
+			}
+			if e != nil {
+				break
+			}
+		}
+	} else {
+		src, err := os.Open(localPath)
+		if err != nil {
+			return err
+		}
+		defer src.Close()
+		dst, err := s.sftpClient.Create(remotePath)
+		if err != nil {
+			return err
+		}
+		defer dst.Close()
+		buf := make([]byte, 64*1024)
+		for {
+			select {
+			case <-task.ctx.Done():
+				return task.ctx.Err()
+			default:
+			}
+			n, e := src.Read(buf)
+			if n > 0 {
+				dst.Write(buf[:n])
+				task.Progress += int64(n)
+				s.emitTransferProgress(task)
+			}
+			if e != nil {
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// --- Transfer event emitters ---
+
+func (s *SFTPSession) emitTransferStart(task *TransferTask) {
+	name := filepath.Base(task.LocalPath)
+	if task.Type == "download" {
+		name = path.Base(task.RemotePath)
+	}
 	payload := map[string]interface{}{
-		"type":     "sftp:locallist",
-		"files":    files,
-		"localCwd": localCwd,
+		"type":   "sftp:transfer",
+		"taskId": task.ID,
+		"event":  "start",
+		"tfType": task.Type,
+		"name":   name,
+		"total":  task.Total,
 	}
 	jsonBytes, _ := json.Marshal(payload)
 	s.emitData([]byte("\x1b]633;S" + string(jsonBytes) + "\x07"))

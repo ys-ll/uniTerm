@@ -54,13 +54,17 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
+import { useI18n } from '../i18n'
+import { SftpCancelTransfer } from '../../wailsjs/go/main/App'
 import TabItem from './TabItem.vue'
 import WorkspaceTabItem from './WorkspaceTabItem.vue'
 
 const tabStore = useTabStore()
 const panelStore = usePanelStore()
+const { t } = useI18n()
 const tabs = computed(() => tabStore.tabs)
 const activeTabId = computed(() => tabStore.activeTabId)
 
@@ -74,7 +78,43 @@ function setActiveTab(id: string) {
   tabStore.setActiveTab(id)
 }
 
-function closeTab(id: string) {
+async function closeTab(id: string) {
+  const tab = tabs.value.find(t => t.id === id)
+  if (tab) {
+    const panelIds = tab.type === 'workspace' ? tab.panelIds : 'panelId' in tab ? [tab.panelId] : []
+
+    // Check for active transfers
+    let activeCount = 0
+    for (const pid of panelIds) {
+      const tasks = panelStore.getTransferTasks(pid)
+      activeCount += tasks.filter(t => t.status === 'running' || t.status === 'paused').length
+    }
+
+    if (activeCount > 0) {
+      try {
+        await ElMessageBox.confirm(
+          t('sftp.closeConfirmTransfer', { count: activeCount }),
+          t('sftp.closeConfirmTitle'),
+          { confirmButtonText: t('sftp.dialog.confirm'), cancelButtonText: t('sftp.dialog.cancel'), type: 'warning' }
+        )
+      } catch {
+        return
+      }
+
+      // Cancel all active transfers
+      for (const pid of panelIds) {
+        const panel = panelStore.getPanel(pid)
+        if (!panel?.sessionId) continue
+        const tasks = panelStore.getTransferTasks(pid)
+        for (const task of tasks) {
+          if (task.status === 'running' || task.status === 'paused') {
+            try { await SftpCancelTransfer(panel.sessionId, task.id) } catch {}
+          }
+        }
+      }
+    }
+  }
+
   const panelIds = tabStore.closeTab(id)
   panelIds.forEach(pid => panelStore.removePanel(pid))
 }

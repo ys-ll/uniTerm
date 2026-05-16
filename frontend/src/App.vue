@@ -26,6 +26,7 @@
           />
           <SFTPTabContent
             v-else-if="activeTab.type === 'sftp'"
+            :key="activeTab.id"
             :panel-id="activeTab.panelId"
           />
         </template>

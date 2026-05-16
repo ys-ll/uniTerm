@@ -14,6 +14,10 @@ export function CreateSession(arg1, arg2) {
   return window['go']['main']['App']['CreateSession'](arg1, arg2);
 }
 
+export function GetDesktopPath() {
+  return window['go']['main']['App']['GetDesktopPath']();
+}
+
 export function ListSessions() {
   return window['go']['main']['App']['ListSessions']();
 }
@@ -34,8 +38,20 @@ export function OnConnectionsChanged(arg1) {
   return window['go']['main']['App']['OnConnectionsChanged'](arg1);
 }
 
+export function OpenDirectoryDialog() {
+  return window['go']['main']['App']['OpenDirectoryDialog']();
+}
+
 export function OpenFileDialog() {
   return window['go']['main']['App']['OpenFileDialog']();
+}
+
+export function OpenMultipleFilesDialog() {
+  return window['go']['main']['App']['OpenMultipleFilesDialog']();
+}
+
+export function RemoveTempFile(arg1) {
+  return window['go']['main']['App']['RemoveTempFile'](arg1);
 }
 
 export function SaveAIConfig(arg1) {
@@ -60,4 +76,80 @@ export function SessionResize(arg1, arg2, arg3) {
 
 export function SessionWrite(arg1, arg2) {
   return window['go']['main']['App']['SessionWrite'](arg1, arg2);
+}
+
+export function SftpCancelTransfer(arg1, arg2) {
+  return window['go']['main']['App']['SftpCancelTransfer'](arg1, arg2);
+}
+
+export function SftpChangeLocalDir(arg1, arg2) {
+  return window['go']['main']['App']['SftpChangeLocalDir'](arg1, arg2);
+}
+
+export function SftpChangeRemoteDir(arg1, arg2) {
+  return window['go']['main']['App']['SftpChangeRemoteDir'](arg1, arg2);
+}
+
+export function SftpChmod(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpChmod'](arg1, arg2, arg3);
+}
+
+export function SftpGet(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SftpGet'](arg1, arg2, arg3, arg4);
+}
+
+export function SftpListLocal(arg1, arg2) {
+  return window['go']['main']['App']['SftpListLocal'](arg1, arg2);
+}
+
+export function SftpListLocalDrives(arg1) {
+  return window['go']['main']['App']['SftpListLocalDrives'](arg1);
+}
+
+export function SftpListRemote(arg1, arg2) {
+  return window['go']['main']['App']['SftpListRemote'](arg1, arg2);
+}
+
+export function SftpLocalMkdir(arg1, arg2) {
+  return window['go']['main']['App']['SftpLocalMkdir'](arg1, arg2);
+}
+
+export function SftpLocalRemove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpLocalRemove'](arg1, arg2, arg3);
+}
+
+export function SftpLocalRename(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpLocalRename'](arg1, arg2, arg3);
+}
+
+export function SftpMakeDir(arg1, arg2) {
+  return window['go']['main']['App']['SftpMakeDir'](arg1, arg2);
+}
+
+export function SftpPauseTransfer(arg1, arg2) {
+  return window['go']['main']['App']['SftpPauseTransfer'](arg1, arg2);
+}
+
+export function SftpPut(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SftpPut'](arg1, arg2, arg3, arg4);
+}
+
+export function SftpPutContent(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpPutContent'](arg1, arg2, arg3);
+}
+
+export function SftpRemove(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpRemove'](arg1, arg2, arg3);
+}
+
+export function SftpRename(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpRename'](arg1, arg2, arg3);
+}
+
+export function SftpResumeTransfer(arg1, arg2) {
+  return window['go']['main']['App']['SftpResumeTransfer'](arg1, arg2);
+}
+
+export function WriteTempFile(arg1, arg2) {
+  return window['go']['main']['App']['WriteTempFile'](arg1, arg2);
 }
