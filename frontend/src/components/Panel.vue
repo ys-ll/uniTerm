@@ -13,7 +13,7 @@
           class="panel-ai-lock"
           :class="{ locked: isAILocked }"
           @click.stop="emit('toggleAiLock', panel.id)"
-          :title="isAILocked ? 'AI locked to this panel' : 'Lock AI to this panel'"
+          :title="isAILocked ? t('terminal.aiLockedToPanel') : t('terminal.lockAIToPanel')"
         >AI</button>
         <button class="panel-close" @click.stop="emit('close', panel.id)">×</button>
       </div>
@@ -34,7 +34,10 @@ import { useTabStore } from '../stores/tabStore'
 import { usePanelStore } from '../stores/panelStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { CreateSession } from '../../wailsjs/go/main/App'
+import { useI18n } from '../i18n'
 import type { Panel } from '../types/workspace'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   panel: Panel

@@ -234,6 +234,7 @@ function onRowDblClick(row: FileItem) {
 }
 
 function onRowContextMenu(row: FileItem, _column: any, event: MouseEvent) {
+  if (row.name === '..') return
   event.preventDefault()
   event.stopPropagation()
   closeMenu()

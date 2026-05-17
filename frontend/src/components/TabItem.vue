@@ -26,7 +26,7 @@
       class="tab-ai-lock"
       :class="{ locked: isAILocked }"
       @click.stop="$emit('toggleAiLock', tab.panelId)"
-      :title="isAILocked ? 'AI locked' : 'Lock AI'"
+      :title="isAILocked ? t('terminal.aiLocked') : t('terminal.lockAI')"
     >AI</button>
     <button
       v-if="isActive || showClose"

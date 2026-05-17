@@ -3,6 +3,7 @@ import { ref, computed, reactive } from 'vue'
 import type { AIMessage, AIConfig, ExecutionMode, AISession } from '../types/ai'
 import { SaveAIConfig, LoadAIConfig } from '../../wailsjs/go/main/App'
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string'
+import { t } from '../i18n'
 
 const SESSIONS_KEY = 'uniterm:ai-sessions'
 const CURRENT_SESSION_KEY = 'uniterm:ai-current-session'
@@ -90,7 +91,7 @@ export const useAIStore = defineStore('ai', () => {
       if (s) {
         s.messages.push(r)
         s.updatedAt = Date.now()
-        if (msg.role === 'user' && s.name === 'New Session') {
+        if (msg.role === 'user' && s.name === t('ai.newSession')) {
           const trimmed = msg.content.trim()
           if (trimmed) {
             s.name = trimmed.length > 20 ? trimmed.slice(0, 20) + '...' : trimmed
@@ -198,7 +199,7 @@ export const useAIStore = defineStore('ai', () => {
     const now = Date.now()
     const session: AISession = {
       id: `session-${now}`,
-      name: name || 'New Session',
+      name: name || t('ai.newSession'),
       createdAt: now,
       updatedAt: now,
       messages: []

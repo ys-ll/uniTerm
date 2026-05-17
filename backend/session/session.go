@@ -11,17 +11,29 @@ const (
 	StatusError        SessionStatus = "error"
 )
 
+type ConnectionGroup struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type ConnectionConfig struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	User     string `json:"user"`
-	AuthType string `json:"authType"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Type     string  `json:"type"`
+	Host     string  `json:"host"`
+	Port     int     `json:"port"`
+	User     string  `json:"user"`
+	AuthType string  `json:"authType"`
 	// Password is stored in plaintext JSON. Will be migrated to OS keychain in a future iteration.
-	Password string `json:"password,omitempty"`
-	KeyPath  string `json:"keyPath,omitempty"`
+	Password string  `json:"password,omitempty"`
+	KeyPath  string  `json:"keyPath,omitempty"`
+	GroupId  *string `json:"groupId,omitempty"`
+}
+
+// ConnectionStoreData is the top-level structure persisted to connections.json.
+type ConnectionStoreData struct {
+	Groups      []ConnectionGroup  `json:"groups"`
+	Connections []ConnectionConfig `json:"connections"`
 }
 
 type SessionInfo struct {

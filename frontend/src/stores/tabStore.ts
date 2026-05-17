@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { reactive, computed } from 'vue'
 import type { Tab, TerminalTab, SettingsTab, WorkspaceTab, SFTPTab, PanelLayout, LayoutNode } from '../types/workspace'
 import { usePanelStore } from './panelStore'
+import { t } from '../i18n'
 
 const tabState = reactive<{
   tabs: Tab[]
@@ -19,12 +20,12 @@ function genId(prefix: string): string {
 }
 
 function generateWorkspaceName(existingTabs: Tab[]): string {
-  const base = 'Workspace'
+  const base = t('workspace.defaultName')
   const existingNames = existingTabs.filter(t => t.type === 'workspace').map(t => t.name)
   if (!existingNames.includes(base)) return base
   let i = 2
-  while (existingNames.includes(`Workspace (${i})`)) i++
-  return `Workspace (${i})`
+  while (existingNames.includes(`${base} (${i})`)) i++
+  return `${base} (${i})`
 }
 
 export const useTabStore = defineStore('tab', () => {

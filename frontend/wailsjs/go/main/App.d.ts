@@ -15,7 +15,7 @@ export function ListSessions():Promise<Array<session.SessionInfo>>;
 
 export function LoadAIConfig():Promise<store.AIConfig>;
 
-export function LoadConnections():Promise<Array<session.ConnectionConfig>>;
+export function LoadConnections():Promise<session.ConnectionStoreData>;
 
 export function LoadSettings():Promise<store.AppSettings>;
 
@@ -31,7 +31,7 @@ export function RemoveTempFile(arg1:string):Promise<void>;
 
 export function SaveAIConfig(arg1:store.AIConfig):Promise<void>;
 
-export function SaveConnections(arg1:Array<session.ConnectionConfig>):Promise<void>;
+export function SaveConnections(arg1:session.ConnectionStoreData):Promise<void>;
 
 export function SaveFileDialog(arg1:string):Promise<string>;
 

@@ -30,25 +30,45 @@ func (s *ConnectionStore) filePath() string {
 	return filepath.Join(s.configDir, storeFileName)
 }
 
-func (s *ConnectionStore) Save(connections []session.ConnectionConfig) error {
-	data, err := json.MarshalIndent(connections, "", "  ")
+func (s *ConnectionStore) Save(data session.ConnectionStoreData) error {
+	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.filePath(), data, 0600)
+	return os.WriteFile(s.filePath(), jsonData, 0600)
 }
 
-func (s *ConnectionStore) Load() ([]session.ConnectionConfig, error) {
-	data, err := os.ReadFile(s.filePath())
+func (s *ConnectionStore) Load() (session.ConnectionStoreData, error) {
+	fileData, err := os.ReadFile(s.filePath())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []session.ConnectionConfig{}, nil
+			return session.ConnectionStoreData{
+				Groups:      []session.ConnectionGroup{},
+				Connections: []session.ConnectionConfig{},
+			}, nil
 		}
-		return nil, err
+		return session.ConnectionStoreData{}, err
 	}
+
+	// Try new format first: {"groups": [...], "connections": [...]}
+	var data session.ConnectionStoreData
+	if err := json.Unmarshal(fileData, &data); err == nil && (data.Groups != nil || data.Connections != nil) {
+		if data.Groups == nil {
+			data.Groups = []session.ConnectionGroup{}
+		}
+		if data.Connections == nil {
+			data.Connections = []session.ConnectionConfig{}
+		}
+		return data, nil
+	}
+
+	// Fallback: old format — plain array of connections
 	var connections []session.ConnectionConfig
-	if err := json.Unmarshal(data, &connections); err != nil {
-		return nil, err
+	if err := json.Unmarshal(fileData, &connections); err != nil {
+		return session.ConnectionStoreData{}, err
 	}
-	return connections, nil
+	return session.ConnectionStoreData{
+		Groups:      []session.ConnectionGroup{},
+		Connections: connections,
+	}, nil
 }

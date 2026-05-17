@@ -66,20 +66,20 @@ func (a *App) shutdown(ctx context.Context) {
 
 // ConnectionStore methods
 
-func (a *App) SaveConnections(connections []session.ConnectionConfig) error {
+func (a *App) SaveConnections(data session.ConnectionStoreData) error {
 	if a.connectionStore == nil {
 		return fmt.Errorf("connection store not initialized")
 	}
-	err := a.connectionStore.Save(connections)
+	err := a.connectionStore.Save(data)
 	if err == nil {
-		runtime.EventsEmit(a.ctx, "store:connections:changed", connections)
+		runtime.EventsEmit(a.ctx, "store:connections:changed", data)
 	}
 	return err
 }
 
-func (a *App) LoadConnections() ([]session.ConnectionConfig, error) {
+func (a *App) LoadConnections() (session.ConnectionStoreData, error) {
 	if a.connectionStore == nil {
-		return nil, fmt.Errorf("connection store not initialized")
+		return session.ConnectionStoreData{}, fmt.Errorf("connection store not initialized")
 	}
 	return a.connectionStore.Load()
 }
@@ -153,11 +153,11 @@ func (a *App) GetDesktopPath() (string, error) {
 	return filepath.Join(homeDir, "Desktop"), nil
 }
 
-func (a *App) OnConnectionsChanged(callback func([]session.ConnectionConfig)) {
+func (a *App) OnConnectionsChanged(callback func(session.ConnectionStoreData)) {
 	runtime.EventsOn(a.ctx, "store:connections:changed", func(optionalData ...interface{}) {
 		if len(optionalData) > 0 {
-			if connections, ok := optionalData[0].([]session.ConnectionConfig); ok {
-				callback(connections)
+			if data, ok := optionalData[0].(session.ConnectionStoreData); ok {
+				callback(data)
 			}
 		}
 	})

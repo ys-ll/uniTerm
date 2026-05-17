@@ -11,6 +11,7 @@ export interface ConnectionConfig {
   authType: string
   password?: string
   keyPath?: string
+  groupId?: string
 }
 
 export interface Panel {

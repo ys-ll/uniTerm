@@ -236,7 +236,7 @@ watch(() => settingsStore.openCategory, (cat) => {
     activeCategory.value = cat
     settingsStore.openCategory = null
   }
-})
+}, { immediate: true })
 
 const categories = computed(() => {
   // Explicitly read language to ensure reactivity tracking

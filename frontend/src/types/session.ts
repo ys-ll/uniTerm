@@ -1,5 +1,10 @@
 export type SessionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
+export interface ConnectionGroup {
+  id: string
+  name: string
+}
+
 export interface ConnectionConfig {
   id: string
   name: string
@@ -10,6 +15,7 @@ export interface ConnectionConfig {
   authType: 'password' | 'key' | 'agent'
   password?: string
   keyPath?: string
+  groupId?: string
 }
 
 export interface SessionInfo {

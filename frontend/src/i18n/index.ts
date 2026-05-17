@@ -23,6 +23,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'sidebar.edit': '编辑',
     'sidebar.duplicate': '复制',
     'sidebar.delete': '删除',
+    'sidebar.deleteConfirm': '确定要删除选中的 {count} 个连接吗？',
+    'sidebar.newConnectionFromSearch': '新建连接...',
+
+    // Workspace
+    'workspace.defaultName': '工作区',
 
     // ConnectionForm
     'conn.editTitle': '编辑连接',
@@ -45,6 +50,23 @@ const messages: Record<Locale, Record<string, string>> = {
     'conn.save': '保存',
     'conn.saveOnly': '仅保存',
     'conn.hostRequired': '主机地址不能为空',
+    'conn.group': '所属分组',
+    'conn.noGroup': '(无分组)',
+    'conn.newGroup': '+ 新建分组',
+    'conn.newGroupTitle': '新建分组',
+    'conn.newGroupPrompt': '请输入分组名称：',
+    'conn.groupName': '分组名称',
+    'conn.groupNamePlaceholder': '输入分组名称...',
+    'conn.groupNameRequired': '分组名称不能为空',
+    'conn.groupNameExists': '分组名称已存在',
+    'conn.deleteGroupTitle': '删除分组',
+    'conn.deleteGroupPrompt': '分组 "{name}" 下有 {count} 个连接，请选择：',
+    'conn.deleteGroupDeleteAll': '删除组下所有连接',
+    'conn.deleteGroupMoveOut': '将连接移出分组',
+    'conn.deleteGroupCancel': '取消',
+    'conn.renameGroup': '重命名分组',
+    'conn.deleteGroup': '删除分组',
+    'conn.changeGroup': '修改分组',
 
     // TabItem
     'tab.duplicate': '复制标签',
@@ -59,6 +81,10 @@ const messages: Record<Locale, Record<string, string>> = {
     'terminal.copy': '复制',
     'terminal.copyAndPaste': '复制并粘贴',
     'terminal.paste': '粘贴',
+    'terminal.aiLocked': 'AI 已锁定',
+    'terminal.lockAI': '锁定 AI',
+    'terminal.aiLockedToPanel': 'AI 已锁定到此面板',
+    'terminal.lockAIToPanel': '锁定 AI 到此面板',
 
     // Input context menu
     'input.cut': '剪切',
@@ -218,6 +244,11 @@ const messages: Record<Locale, Record<string, string>> = {
     'sidebar.edit': 'Edit',
     'sidebar.duplicate': 'Duplicate',
     'sidebar.delete': 'Delete',
+    'sidebar.deleteConfirm': 'Delete {count} selected connection(s)?',
+    'sidebar.newConnectionFromSearch': 'New Connection...',
+
+    // Workspace
+    'workspace.defaultName': 'Workspace',
 
     // ConnectionForm
     'conn.editTitle': 'Edit Connection',
@@ -240,6 +271,23 @@ const messages: Record<Locale, Record<string, string>> = {
     'conn.save': 'Save',
     'conn.saveOnly': 'Save Only',
     'conn.hostRequired': 'Host is required',
+    'conn.group': 'Group',
+    'conn.noGroup': '(No Group)',
+    'conn.newGroup': '+ New Group',
+    'conn.newGroupTitle': 'New Group',
+    'conn.newGroupPrompt': 'Enter group name:',
+    'conn.groupName': 'Group Name',
+    'conn.groupNamePlaceholder': 'Enter group name...',
+    'conn.groupNameRequired': 'Group name is required',
+    'conn.groupNameExists': 'Group name already exists',
+    'conn.deleteGroupTitle': 'Delete Group',
+    'conn.deleteGroupPrompt': 'Group "{name}" has {count} connection(s). Choose an action:',
+    'conn.deleteGroupDeleteAll': 'Delete all connections in group',
+    'conn.deleteGroupMoveOut': 'Move connections out of group',
+    'conn.deleteGroupCancel': 'Cancel',
+    'conn.renameGroup': 'Rename Group',
+    'conn.deleteGroup': 'Delete Group',
+    'conn.changeGroup': 'Change Group',
 
     // TabItem
     'tab.duplicate': 'Duplicate',
@@ -254,6 +302,10 @@ const messages: Record<Locale, Record<string, string>> = {
     'terminal.copy': 'Copy',
     'terminal.copyAndPaste': 'Copy & Paste',
     'terminal.paste': 'Paste',
+    'terminal.aiLocked': 'AI locked',
+    'terminal.lockAI': 'Lock AI',
+    'terminal.aiLockedToPanel': 'AI locked to this panel',
+    'terminal.lockAIToPanel': 'Lock AI to this panel',
 
     // Input context menu
     'input.cut': 'Cut',

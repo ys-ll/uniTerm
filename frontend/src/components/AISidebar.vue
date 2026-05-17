@@ -338,16 +338,16 @@ async function onContinue() {
 }
 
 function openGlobalSettings() {
-  settingsStore.openCategory = 'ai'
   const existingTab = tabStore.tabs.find(t => t.type === 'settings')
   if (existingTab) {
     tabStore.setActiveTab(existingTab.id)
-    return
+  } else {
+    const panel = panelStore.createPanel(null, 'settings')
+    panel.title = t('settings.title')
+    const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
+    panelStore.movePanelToTab(panel.id, tab.id)
   }
-  const panel = panelStore.createPanel(null, 'settings')
-  panel.title = t('settings.title')
-  const tab = tabStore.createSettingsTab(t('settings.title'), panel.id)
-  panelStore.movePanelToTab(panel.id, tab.id)
+  settingsStore.openCategory = 'ai'
 }
 
 function onResizeStart(e: MouseEvent) {
