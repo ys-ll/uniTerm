@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="appicon.png" alt="uniTerm" width="128" height="128" />
+  <img src="build/appicon.png" alt="uniTerm" width="128" height="128" />
   <h1>uniTerm</h1>
   <p>A modern cross-platform terminal emulator with built-in AI assistant.</p>
 </div>
