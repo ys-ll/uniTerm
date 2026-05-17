@@ -69,6 +69,7 @@
         class="sftp-context-menu"
         :style="contextMenuStyle"
         @click.stop
+        @mousedown.stop
       >
         <template v-if="menuType === 'file' || menuType === 'dir'">
           <div class="menu-item" @click="doSendToOther">{{ t(sendToKey) }}</div>
